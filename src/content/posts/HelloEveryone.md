@@ -4,7 +4,7 @@ published: 2025-12-24
 description: Complete the migration of the blog
 tags: [Blogging]
 category: Guides
-draft: true
+draft: false
 slug: '202512241047'
 ---
 
