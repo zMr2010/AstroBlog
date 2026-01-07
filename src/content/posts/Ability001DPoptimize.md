@@ -1,7 +1,7 @@
 ---
 title: DP Optimize
 published: 2025-12-24 16:58:01
-description: Common optimization of DP (Prefix Transition)
+description: Common optimization of DP
 tags: [DP, Optimize]
 category: Algorithm
 draft: false
