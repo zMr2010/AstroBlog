@@ -4,7 +4,7 @@ published: 2026-01-16 20:00:07
 description: A basic transform to calculate convolution
 tags: [Math, Transform]
 category: Algorithm
-draft: true
+draft: false
 slug: '20260116'
 ---
 
