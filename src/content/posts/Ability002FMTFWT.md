@@ -87,3 +87,261 @@ The time complexity of this code optmize above transform to O(n\times 2^n), beca
 ## And Operation
 
 The algorithm flow is same. 
+
+We are trying to find a transform like FMT Or operation.
+
+Let $A$ is the array after transform, we have:
+$$
+A_i = \sum_{i=i\cap j} a_j
+$$
+
+That means $j$ is the superset of $i$, so just like before but we should add contribution from superset to subset.
+
+```cpp
+auto FMTand(const std::vector<ll>& a, int flag) -> std::vector<ll> {
+    auto trA{a};
+    for (int o{2}, k{1}; o <= n; o <<= 1, k <<= 1) {
+        for (int i{0}; i < n; i += o) {
+            for (int j{0}; j < k; j++) {
+                trA[i+j] = (trA[i+j] + trA[i+j+k] * flag % MOD + MOD) % MOD;
+            }
+        }
+    }
+    return trA;
+}
+```
+
+## Full Template
+
+Really not difficult
+
+```cpp
+/**
+ * @file    : FastMobiusTransform.cpp 
+ * @date    : 2026-01-15
+ * @brief   : LuoguP4717
+ */
+
+#include <iostream>
+#include <vector>
+
+#include <iostream>
+#include <vector>
+
+class FastMobiusTransform {
+private:
+    using ll = long long;
+
+    const int MOD;
+    int n;
+    std::vector<ll> a, b;
+public:
+    explicit FastMobiusTransform(int n, int MOD) : MOD{MOD}, n{n}, a(n), b(n) {}
+    FastMobiusTransform(int MOD, const std::vector<ll> a, const std::vector<ll> b)
+        : MOD{MOD}, n(a.size()), a{a}, b{b} {}
+
+    void input() {
+        for (int i{0}; i < n; i++) {
+            std::cin >> a[i];
+        }
+        for (int i{0}; i < n; i++) {
+            std::cin >> b[i];
+        }
+    }
+
+    auto FMTor(const std::vector<ll>& a, int flag) -> std::vector<ll> {
+        auto trA{a};
+        for (int o{2}, k{1}; o <= n; o <<= 1, k <<= 1) {
+            for (int i{0}; i < n; i += o) {
+                for (int j{0}; j < k; j++) {
+                    trA[i+j+k] = (trA[i+j+k] + trA[i+j] * flag % MOD + MOD) % MOD;
+                }
+            }
+        }
+        return trA;
+    }
+    auto FMTand(const std::vector<ll>& a, int flag) -> std::vector<ll> {
+        auto trA{a};
+        for (int o{2}, k{1}; o <= n; o <<= 1, k <<= 1) {
+            for (int i{0}; i < n; i += o) {
+                for (int j{0}; j < k; j++) {
+                    trA[i+j] = (trA[i+j] + trA[i+j+k] * flag % MOD + MOD) % MOD;
+                }
+            }
+        }
+        return trA;
+    }
+
+    auto transformOr() -> std::vector<ll> {
+        auto trA = FMTor(a, 1);
+        auto trB = FMTor(b, 1);
+        std::vector<ll> trC(n);
+        for (int i{0}; i < n; i++) {
+            trC[i] = trA[i] * trB[i] % MOD;
+        }
+        return FMTor(trC, -1);
+    }
+    auto transformAnd() -> std::vector<ll> {
+        auto trA = FMTand(a, 1);
+        auto trB = FMTand(b, 1);
+        std::vector<ll> trC(n);
+        for (int i{0}; i < n; i++) {
+            trC[i] = trA[i] * trB[i] % MOD;
+        }
+        return FMTand(trC, -1);
+    }
+};
+
+auto main() -> int {
+    int n, MOD;
+    std::cin >> n >> MOD;
+    FastMobiusTransform fmt(1<<n, MOD);
+    fmt.input();
+
+    auto ans_or{fmt.transformOr()};
+    for (auto& p : ans_or) {
+        std::cout << p << ' ';
+    }
+    std::cout << "\n";
+    auto ans_and{fmt.transformAnd()};
+    for (auto& p : ans_and) {
+        std::cout << p << ' ';
+    }
+    std::cout << "\n";
+    return 0;
+}
+```
+
+# FWT
+
+As you can see this part we are going to introduce FWT, this algorithm is using to solve below formula:
+$$
+c_k = \sum_{i\oplus j = k} a_i\times b_j
+$$
+* $\oplus$ indicates XOR operator.
+
+Let $A$ is the transformed array of $a$ that:
+$$
+A_i = \sum_{i\circ j = 0} a_j - \sum_{i\circ j = 1} a_j
+$$
+* In the formula, $i\circ j$ indicates $\operatorname{popcount}(i\cap j)\bmod 2$
+
+And we can check its correctness:
+
+$$
+\begin{aligned}
+A_i\times B_i
+&= \left(\sum_{i\circ j = 0} a_j - \sum_{i\circ j = 1} a_j\right)\times \left(\sum_{i\circ k = 0} b_k - \sum_{i\circ k = 1} b_k\right)\\
+&= \left(\sum_{i\circ j = 0} a_j\sum_{i\circ k = 0} b_k + \sum_{i\circ j = 1}a_j\sum_{i\circ k = 1} b_k\right) - \left(\sum_{i\circ j = 0} a_j\sum_{i\circ k = 1} b_k + \sum_{i\circ j = 1}a_j\sum_{i\circ k = 0} b_k\right)\\
+&= \sum_{(j\oplus k)\circ i = 0} a_ib_k - \sum_{(j\oplus k)\circ i = 1} a_ib_k\\
+&= C_i
+\end{aligned}
+$$
+
+The transformation between second row and third row is because each of they denote one situation of result of $i\oplus j$, so they mix to one part.
+
+How to calculate it? Still divide, we know that:
+| Do "$\circ$" operater | 0 | 1 |
+| :------: | :-: | :-: |
+| 0                   | 0 | 0 |
+| 1                   | 0 | 1 |
+
+So that:
+$$
+{A'}_0 = A_0+A_1\\
+{A'}_1 = A_0-A_1
+$$
+
+Also we can get inverse transform:
+$$
+A_0 = \frac{A'_0+A'_1}{2}\\
+A_1 = \frac{A'_0-A'_1}{2}
+$$
+
+Code also easily.
+
+## Full Template
+
+```cpp
+/**
+ * @file    : FastWalshTransform.cpp 
+ * @date    : 2026-01-15
+ * @brief   : LuoguP4717
+ */
+
+#include <iostream>
+#include <vector>
+
+class FastWalshTransform {
+private:
+    using ll = long long;
+
+    const int MOD;
+    int n;
+    std::vector<ll> a, b;
+
+    auto pow2(int x) {
+        ll ans = 1, a = 2;
+        while (x) {
+            if (x & 1) ans = ans * a % MOD;
+            a = a * a % MOD;
+            x >>= 1;
+        }
+        return ans;
+    }
+public:
+    explicit FastWalshTransform(int n, int MOD) : MOD{MOD}, n{n}, a(n), b(n) {}
+    FastWalshTransform(int MOD, const std::vector<ll> a, const std::vector<ll> b)
+        : MOD{MOD}, n(a.size()), a{a}, b{b} {}
+
+    void input() {
+        for (int i{0}; i < n; i++) {
+            std::cin >> a[i];
+        }
+        for (int i{0}; i < n; i++) {
+            std::cin >> b[i];
+        }
+    }
+
+    auto fwtXor(const std::vector<ll>& a, int flag) -> std::vector<ll> {
+        auto trA{a};
+        for (int o{2}, k{1}; o <= n; o <<= 1, k <<= 1) {
+            for (int i{0}; i < n; i += o) {
+                for (int j{0}; j < k; j++) {
+                    auto u{trA[i+j]}, v{trA[i+j+k]};
+                    trA[i+j] = (flag * (trA[i+j] + v) % MOD + MOD) % MOD;
+                    trA[i+j+k] = (flag * (u - trA[i+j+k]) % MOD + MOD) % MOD;
+                }
+            }
+        }
+        return trA;
+    }
+
+    auto transform() -> std::vector<ll> {
+        auto trA{fwtXor(a, 1)};
+        auto trB{fwtXor(b, 1)};
+        std::vector<ll> trC(n);
+        for (int i{0}; i < n; i++) {
+            trC[i] = trA[i] * trB[i] % MOD;
+        }
+        return fwtXor(trC, pow2(MOD-2));
+    }
+};
+
+auto main() -> int {
+    int n, MOD;
+    std::cin >> n >> MOD;
+    FastWalshTransform fwt(1<<n, MOD);
+    fwt.input();
+    auto ans{fwt.transform()};
+    for (auto& p : ans) {
+        std::cout << p << ' ';
+    }
+    std::cout << "\n";
+    return 0;
+}
+```
+
+# Summarize
+
+That's all, actually these knowledge doesn't usefull in OI, but we still need learn it...
