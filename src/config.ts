@@ -62,6 +62,16 @@ export const profileConfig: ProfileConfig = {
 			icon: "fa6-brands:github",
 			url: "https://github.com/zMr2010",
 		},
+		{
+			name: "QQ",
+			icon: "fa6-brands:qq",
+			url: "https://qm.qq.com/q/Z1mLn5nBKi",
+		},
+		{
+			name: "Email",
+			icon: "fa6-solid:envelope-open",
+			url: "mailto:2356327510@qq.com",
+		},
 	],
 };
 

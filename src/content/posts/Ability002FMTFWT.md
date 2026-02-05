@@ -5,7 +5,7 @@ description: A basic transform to calculate convolution
 tags: [Math, Transform]
 category: Algorithm
 draft: false
-slug: '20260116'
+slug: '202601162039'
 ---
 
 # Introduction
