@@ -4,7 +4,7 @@ published: 2026-03-22 20:01:23
 description: Useful
 tags: [Trigonometric, Math]
 category: Memo
-draft: true
+draft: false
 slug: '202603222001'
 ---
 
