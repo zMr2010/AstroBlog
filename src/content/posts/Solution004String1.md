@@ -261,3 +261,29 @@ int main()
 }
 ```
 
+# LuoguP3082 [USACO13MAR] Necklace G
+
+> **Useful Link**  
+> [Problem Statement](https://www.luogu.com.cn/problem/P3082)  
+> [Reference Blog](https://www.luogu.com.cn/article/vhpibjbr)
+
+This is a problem which using KMP to optmize DP.
+
+Let $f_{i,j}$ denotes, the maximum we can keep when the first $i$-th letter of $a$ map the first $j$-th letter of $b$ exactly. Then we can get a easy transition
+
+$$
+f_{i+1,k} = \max\{f_{i+1,k} ,f_{i,j}+1\}
+$$
+
+Then we should consider how to calculate $k$ quickly. Let $g_{i,j}$ denotes $k$ when map the first $i$-th letter of $b$ exactly and then next letter is $j$. Then we can get below transition.
+
+$$
+g_{i,j} =
+\begin{cases}
+i+1 & b[i+1] == j\\
+g_{nxt_{i}, j} & \operatorname{otherwise.}
+\end{cases}
+$$
+
+Coding is easy.
+
