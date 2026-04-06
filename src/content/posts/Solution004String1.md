@@ -2,7 +2,7 @@
 title: Solution Report of String(Easy) Topic
 published: 2026-03-26 19:38:13
 description: Easy
-tags: [Interactive]
+tags: [String]
 category: Solution
 draft: false
 slug: '202603121938'
