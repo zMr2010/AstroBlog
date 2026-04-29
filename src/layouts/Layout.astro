@@ -166,6 +166,12 @@ const bannerOffset =
 }}>
 @tailwind components;
 @layer components {
+	.enable-banner {
+		--banner-image-blur: 0px;
+		--banner-image-scale: 1;
+		--banner-glass-blur: 0px;
+		--banner-glass-opacity: 0;
+	}
 	.enable-banner.is-home #banner-wrapper {
 		@apply h-[var(--banner-height-home)] translate-y-[var(--banner-height-extend)]
 	}
@@ -178,6 +184,26 @@ const bannerOffset =
 	}
 	.enable-banner #banner {
 		@apply h-[var(--banner-height-home)] translate-y-[var(--bannerOffset)]
+	}
+	.enable-banner #banner::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: rgb(255 255 255 / var(--banner-glass-opacity));
+		backdrop-filter: blur(var(--banner-glass-blur)) saturate(140%);
+		-webkit-backdrop-filter: blur(var(--banner-glass-blur)) saturate(140%);
+		transition: background-color 150ms ease, backdrop-filter 150ms ease;
+	}
+	.dark .enable-banner #banner::after {
+		background: rgb(15 23 42 / calc(var(--banner-glass-opacity) * 0.95));
+	}
+	.enable-banner #banner img {
+		filter: blur(var(--banner-image-blur));
+		transform: scale(var(--banner-image-scale));
+		transform-origin: center;
+		transition: filter 150ms ease, transform 150ms ease;
+		will-change: filter, transform;
 	}
 	.enable-banner.is-home #main-grid {
 		@apply translate-y-[var(--banner-height-extend)];
@@ -257,6 +283,30 @@ function disableAnimation() {
 */
 
 const bannerEnabled = !!document.getElementById('banner-wrapper')
+
+function getScrollTop() {
+	return document.documentElement.scrollTop || document.body.scrollTop || 0
+}
+
+function getCurrentBannerHeight() {
+	let bannerHeight = BANNER_HEIGHT
+	if (document.body.classList.contains('lg:is-home') && window.innerWidth >= 1024) {
+		bannerHeight = BANNER_HEIGHT_HOME
+	}
+	return window.innerHeight * (bannerHeight / 100)
+}
+
+function updateBannerScrollEffects() {
+	if (!bannerEnabled) return
+
+	const progress = Math.min(getScrollTop() / Math.max(getCurrentBannerHeight(), 1), 1)
+	const easedProgress = 1 - Math.pow(1 - progress, 2)
+
+	document.documentElement.style.setProperty('--banner-image-blur', `${(easedProgress * 18).toFixed(2)}px`)
+	document.documentElement.style.setProperty('--banner-image-scale', `${(1 + easedProgress * 0.06).toFixed(3)}`)
+	document.documentElement.style.setProperty('--banner-glass-blur', `${(easedProgress * 24).toFixed(2)}px`)
+	document.documentElement.style.setProperty('--banner-glass-opacity', `${(easedProgress * 0.24).toFixed(3)}`)
+}
 
 function setClickOutsideToClose(panel: string, ignores: string[]) {
 	document.addEventListener("click", event => {
@@ -369,6 +419,7 @@ function init() {
 	loadHue();
 	initCustomScrollbar();
 	showBanner();
+	updateBannerScrollEffects();
 }
 
 /* Load settings when entering the site */
@@ -425,6 +476,8 @@ const setup = () => {
 		if (toc) {
 			toc.classList.add('toc-not-ready')
 		}
+
+		updateBannerScrollEffects()
 	});
 	window.swup.hooks.on('page:view', () => {
 		// hide the temp high element when the transition is done
@@ -432,6 +485,8 @@ const setup = () => {
 		if (heightExtend) {
 			heightExtend.classList.remove('hidden')
 		}
+
+		updateBannerScrollEffects()
 	});
 	window.swup.hooks.on('visit:end', (_visit: {to: {url: string}}) => {
 		setTimeout(() => {
@@ -458,10 +513,13 @@ let backToTopBtn = document.getElementById('back-to-top-btn');
 let toc = document.getElementById('toc-wrapper');
 let navbar = document.getElementById('navbar-wrapper')
 function scrollFunction() {
+	const scrollTop = getScrollTop()
+	updateBannerScrollEffects()
+
 	let bannerHeight = window.innerHeight * (BANNER_HEIGHT / 100)
 
 	if (backToTopBtn) {
-		if (document.body.scrollTop > bannerHeight || document.documentElement.scrollTop > bannerHeight) {
+		if (scrollTop > bannerHeight) {
 			backToTopBtn.classList.remove('hide')
 		} else {
 			backToTopBtn.classList.add('hide')
@@ -469,7 +527,7 @@ function scrollFunction() {
 	}
 
 	if (bannerEnabled && toc) {
-		if (document.body.scrollTop > bannerHeight || document.documentElement.scrollTop > bannerHeight) {
+		if (scrollTop > bannerHeight) {
 			toc.classList.remove('toc-hide')
 		} else {
 			toc.classList.add('toc-hide')
@@ -486,7 +544,7 @@ function scrollFunction() {
 			bannerHeight = BANNER_HEIGHT_HOME
 		}
 		let threshold = window.innerHeight * (bannerHeight / 100) - NAVBAR_HEIGHT - MAIN_PANEL_EXCESS_HEIGHT - 16
-		if (document.body.scrollTop >= threshold || document.documentElement.scrollTop >= threshold) {
+		if (scrollTop >= threshold) {
 			navbar.classList.add('navbar-hidden')
 		} else {
 			navbar.classList.remove('navbar-hidden')
@@ -500,6 +558,7 @@ window.onresize = () => {
 	let offset = Math.floor(window.innerHeight * (BANNER_HEIGHT_EXTEND / 100));
 	offset = offset - offset % 4;
 	document.documentElement.style.setProperty('--banner-height-extend', `${offset}px`);
+	updateBannerScrollEffects();
 }
 
 </script>
