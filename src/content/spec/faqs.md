@@ -14,4 +14,5 @@ Old blog: [Link](old.517group.cn)
   <img src="/images/avatar_music.png" style="width:100%;aspect-ratio:1/1;object-fit:cover;margin:0;display:block;">
   <img src="/images/avatar_Rossi.jpg" style="width:100%;aspect-ratio:1/1;object-fit:cover;margin:0;display:block;">
   <img src="/images/JaychouAvatar.png" style="width:100%;aspect-ratio:1/1;object-fit:cover;margin:0;display:block;">
+  <img src="/images/JaychouGreatestWork.png" style="width:100%;aspect-ratio:1/1;object-fit:cover;margin:0;display:block;">
 </div>
