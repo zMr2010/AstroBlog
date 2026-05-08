@@ -1,10 +1,10 @@
 ---
 title: Introduction of Splay
-published: 2026-05-01 12:04:23
+published: 2026-05-08 19:21:23
 description: Rotate last accessed node to root to maintain amortized efficiency.
 tags: [Structure, Balance Tree, Splay]
 category: Algorithm
-draft: true
+draft: false
 slug: '202605011204'
 ---
 
