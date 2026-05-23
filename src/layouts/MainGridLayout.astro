@@ -46,7 +46,7 @@ const mainPanelTop = siteConfig.banner.enable
 <!-- Navbar -->
 <slot slot="head" name="head"></slot>
 <div id="top-row" class="z-50 pointer-events-none relative transition-all duration-700 max-w-[var(--page-width)] px-0 md:px-4 mx-auto" class:list={[""]}>
-    <div id="navbar-wrapper" class="pointer-events-auto sticky top-0 transition-all">
+    <div id="navbar-wrapper" class="pointer-events-auto fixed top-0 left-0 right-0 z-50 max-w-[var(--page-width)] px-0 md:px-4 mx-auto transition-all duration-300 ease-out will-change-transform">
         <Navbar></Navbar>
     </div>
 </div>
