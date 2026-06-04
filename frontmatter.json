@@ -57,6 +57,11 @@
           "type": "boolean"
         },
         {
+          "title": "biling",
+          "name": "biling",
+          "type": "boolean"
+        },
+        {
           "title": "language",
           "name": "language",
           "type": "string"

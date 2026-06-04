@@ -5,7 +5,7 @@ import Markdown from "@components/misc/Markdown.astro";
 import I18nKey from "@i18n/i18nKey";
 import { i18n } from "@i18n/translation";
 import MainGridLayout from "@layouts/MainGridLayout.astro";
-import { getSortedPosts } from "@utils/content-utils";
+import { getBilingualPostPair, getSortedPosts } from "@utils/content-utils";
 import { getDir, getPostUrlBySlug } from "@utils/url-utils";
 import { Icon } from "astro-icon/components";
 import { licenseConfig } from "src/config";
@@ -23,9 +23,19 @@ export async function getStaticPaths() {
 }
 
 const { entry } = Astro.props;
-const { Content, headings } = await entry.render();
-
-const { remarkPluginFrontmatter } = await entry.render();
+const renderedEntry = await entry.render();
+const {
+	Content: EnglishContent,
+	headings,
+	remarkPluginFrontmatter,
+} = renderedEntry;
+const bilingualPair = await getBilingualPostPair(entry);
+const renderedChineseEntry = bilingualPair
+	? await bilingualPair.cn.render()
+	: null;
+const ChineseContent = renderedChineseEntry?.Content;
+const isBilingual = Boolean(bilingualPair && ChineseContent);
+const chineseTitle = bilingualPair?.cn.data.title ?? entry.data.title;
 
 const jsonLd = {
 	"@context": "https://schema.org",
@@ -48,7 +58,7 @@ const jsonLd = {
 <MainGridLayout banner={entry.data.image} title={entry.data.title} description={entry.data.description} lang={entry.data.lang} setOGTypeArticle={true} headings={headings}>
     <script is:inline slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>
     <div class="flex w-full rounded-[var(--radius-large)] overflow-hidden relative mb-4">
-        <div id="post-container" class:list={["card-base z-10 px-6 md:px-9 pt-6 pb-4 relative w-full ",
+        <div id="post-container" data-bilingual-post={isBilingual ? "true" : undefined} class:list={["card-base z-10 px-6 md:px-9 pt-6 pb-4 relative w-full ",
             {}
         ]}>
             <!-- word count and reading time -->
@@ -72,6 +82,9 @@ const jsonLd = {
             <!-- title -->
             <div class="relative onload-animation">
                 <div
+                    data-bilingual-title={isBilingual ? "true" : undefined}
+                    data-title-en={entry.data.title}
+                    data-title-cn={chineseTitle}
                     data-pagefind-body data-pagefind-weight="10" data-pagefind-meta="title"
                     class="transition w-full block font-bold mb-3
                     text-3xl md:text-[2.25rem]/[2.75rem]
@@ -91,6 +104,7 @@ const jsonLd = {
                         updated={entry.data.updated}
                         tags={entry.data.tags}
                         category={entry.data.category}
+                        showLanguageSwitch={isBilingual}
                 ></PostMetadata>
                 {!entry.data.image && <div class="border-[var(--line-divider)] border-dashed border-b-[1px] mb-5"></div>}
             </div>
@@ -103,8 +117,120 @@ const jsonLd = {
 
 
             <Markdown class="mb-6 markdown-content onload-animation">
-                <Content />
+                {isBilingual ? (
+                    <>
+                        <div data-bilingual-lang="en">
+                            <EnglishContent />
+                        </div>
+                        {ChineseContent && (
+                            <div data-bilingual-lang="cn" hidden>
+                                <ChineseContent />
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <EnglishContent />
+                )}
             </Markdown>
+
+            {isBilingual && (
+                <script is:inline>
+                    (() => {
+                        const setupBilingualPosts = () => {
+							document
+								.querySelectorAll("[data-bilingual-post]")
+								.forEach((post) => {
+									const existingController = post.__bilingualController;
+
+									if (existingController) {
+										existingController.setLanguage("en");
+										return;
+									}
+
+									post.setAttribute("data-bilingual-ready", "true");
+
+                                    const englishNodes = post.querySelectorAll(
+                                        '[data-bilingual-lang="en"]',
+                                    );
+                                    const chineseNodes = post.querySelectorAll(
+                                        '[data-bilingual-lang="cn"]',
+                                    );
+                                    const title = post.querySelector("[data-bilingual-title]");
+                                    const toggle = post.querySelector("[data-bilingual-toggle]");
+                                    const label = post.querySelector(
+                                        "[data-bilingual-toggle-label]",
+                                    );
+									let language = "en";
+
+									chineseNodes.forEach((node) => {
+										const idMap = new Map();
+										node.querySelectorAll("[id]").forEach((target) => {
+											if (target.id && !target.id.startsWith("cn-")) {
+												const prefixedId = `cn-${target.id}`;
+												idMap.set(target.id, prefixedId);
+												target.id = prefixedId;
+											}
+										});
+										node.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+											const href = anchor.getAttribute("href");
+											const targetId = href?.slice(1);
+											const prefixedId = targetId ? idMap.get(targetId) : null;
+
+											if (prefixedId) {
+												anchor.setAttribute("href", `#${prefixedId}`);
+											}
+										});
+									});
+
+									const setLanguage = (nextLanguage) => {
+                                        language = nextLanguage;
+                                        englishNodes.forEach((node) => {
+                                            node.hidden = language !== "en";
+                                        });
+                                        chineseNodes.forEach((node) => {
+                                            node.hidden = language !== "cn";
+                                        });
+
+                                        if (title instanceof HTMLElement) {
+                                            title.textContent =
+                                                language === "en"
+                                                    ? title.dataset.titleEn || ""
+                                                    : title.dataset.titleCn || "";
+                                        }
+
+                                        if (label instanceof HTMLElement) {
+                                            label.textContent =
+                                                language === "en"
+                                                    ? label.dataset.labelCn || "切换语言"
+                                                    : label.dataset.labelEn || "Swith Language";
+                                        }
+
+                                        if (toggle instanceof HTMLElement) {
+                                            toggle.setAttribute(
+                                                "aria-label",
+                                                language === "en" ? "切换语言" : "Swith Language",
+                                            );
+                                        }
+                                    };
+
+									toggle?.addEventListener("click", (event) => {
+										event.preventDefault();
+										setLanguage(language === "en" ? "cn" : "en");
+									});
+
+									post.__bilingualController = { setLanguage };
+									setLanguage("en");
+								});
+						};
+
+                        setupBilingualPosts();
+                        document.addEventListener("astro:page-load", setupBilingualPosts);
+                        if (window.swup?.hooks) {
+                            window.swup.hooks.on("page:view", setupBilingualPosts);
+                        }
+                    })();
+                </script>
+            )}
 
             {licenseConfig.enable && <License title={entry.data.title} slug={entry.slug} pubDate={entry.data.published} class="mb-6 rounded-xl license-container onload-animation"></License>}
 

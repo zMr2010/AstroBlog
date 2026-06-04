@@ -1,4 +1,5 @@
 <script lang="ts">
+import Icon from "@iconify/svelte";
 import { onMount } from "svelte";
 
 import I18nKey from "../i18n/i18nKey";
@@ -21,6 +22,7 @@ interface Post {
 		tags: string[];
 		category?: string | null;
 		published: Date;
+		biling: boolean;
 	};
 }
 
@@ -129,11 +131,18 @@ onMount(async () => {
 
                         <!-- post title -->
                         <div
-                                class="w-[70%] md:max-w-[65%] md:w-[65%] text-left font-bold
+                                class="w-[70%] md:max-w-[65%] md:w-[65%] text-left font-bold flex items-center gap-1.5 min-w-0
                      group-hover:translate-x-1 transition-all group-hover:text-[var(--primary)]
-                     text-75 pr-8 whitespace-nowrap overflow-ellipsis overflow-hidden"
+                     text-75 pr-8 whitespace-nowrap overflow-hidden"
                         >
-                            {post.data.title}
+                            <span class="overflow-hidden overflow-ellipsis">{post.data.title}</span>
+                            {#if post.data.biling}
+                                <Icon
+                                    aria-hidden="true"
+                                    icon="material-symbols:translate-rounded"
+                                    class="shrink-0 text-lg text-[var(--primary)]"
+                                />
+                            {/if}
                         </div>
 
                         <!-- tag list -->
