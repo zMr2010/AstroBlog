@@ -1,0 +1,433 @@
+---
+import { Icon } from "astro-icon/components";
+import MainGridLayout from "../layouts/MainGridLayout.astro";
+import { privateZoneConfig } from "../utils/private-zone";
+
+const { intro, gallery } = privateZoneConfig;
+---
+
+<MainGridLayout title="Private Zone" description="Private Zone" lang="en">
+	<meta slot="head" name="robots" content="noindex, nofollow, noarchive" />
+
+	<section
+		id="private-zone"
+		class="pz-shell"
+		data-private-zone
+		data-unlocked="false"
+		data-pagefind-ignore
+	>
+		<div class="pz-gate card-base" data-pz-gate lang="en">
+			<div class="pz-lock-mark" aria-hidden="true">
+				<Icon name="material-symbols:lock-outline" class="text-[2rem]"></Icon>
+			</div>
+			<h1>Private Zone</h1>
+			<p>Enter the password to access this private space.</p>
+			<form class="pz-password-form" data-pz-password-form>
+				<label for="private-zone-password">Password</label>
+				<div class="pz-password-row">
+					<input
+						id="private-zone-password"
+						data-pz-password
+						type="password"
+						autocomplete="current-password"
+						placeholder="Enter password"
+						required
+					/>
+					<button type="submit">Enter</button>
+				</div>
+				<p class="pz-password-status" data-pz-password-status role="status" aria-live="polite"></p>
+			</form>
+		</div>
+
+		<div class="pz-content" data-pz-content aria-hidden="true" inert lang="zh-CN">
+			<div class="card-base pz-intro-card">
+				<p>{intro}</p>
+			</div>
+
+			{gallery.length > 0 ? (
+				<div class="pz-gallery" data-pz-gallery aria-label="Private Zone 图片">
+					{gallery.map((item) => (
+						<article
+							class="pz-gallery-item"
+							data-ratio={item.ratio}
+						>
+							<button
+								type="button"
+								class="pz-image-button"
+								data-click-caption={item.clickCaption || undefined}
+								data-click-title={item.clickCaption ? item.alt : undefined}
+								aria-label={item.clickCaption ? `查看图片文案：${item.alt}` : undefined}
+								disabled={!item.clickCaption}
+							>
+								<img src={item.src} alt={item.alt} loading="lazy" decoding="async" />
+								{item.hoverCaption && (
+									<span class="pz-hover-caption">{item.hoverCaption}</span>
+								)}
+								{item.date && <time datetime={item.date}>{item.date}</time>}
+							</button>
+						</article>
+					))}
+				</div>
+			) : (
+				<div class="pz-empty card-base">
+					<Icon name="material-symbols:add-photo-alternate-outline-rounded" class="text-[2rem]"></Icon>
+					<p>还没有照片。将图片放入 <code>public/private-zone/images</code>，然后编辑 <code>src/content/private-zone.yml</code> 即可。</p>
+				</div>
+			)}
+
+			<dialog class="pz-caption-dialog" data-pz-dialog aria-labelledby="pz-caption-title">
+				<div class="pz-dialog-header">
+					<h2 id="pz-caption-title" data-pz-dialog-title>照片文案</h2>
+					<button type="button" data-pz-dialog-close aria-label="关闭文案弹窗">
+						<Icon name="material-symbols:close-rounded" class="text-[1.5rem]"></Icon>
+					</button>
+				</div>
+				<p data-pz-dialog-caption></p>
+			</dialog>
+		</div>
+	</section>
+</MainGridLayout>
+
+<style>
+	.pz-shell {
+		width: 100%;
+		min-height: 24rem;
+	}
+
+	.pz-shell[data-unlocked="false"] .pz-content,
+	.pz-shell[data-unlocked="true"] .pz-gate {
+		display: none;
+	}
+
+	.pz-gate {
+		display: flex;
+		min-height: 28rem;
+		align-items: center;
+		justify-content: center;
+		flex-direction: column;
+		padding: 2rem;
+		text-align: center;
+	}
+
+	.pz-lock-mark {
+		display: flex;
+		width: 4rem;
+		height: 4rem;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 1rem;
+		border-radius: 1.25rem;
+		color: var(--primary);
+		background: var(--btn-regular-bg);
+	}
+
+	.pz-gate h1 {
+		color: rgb(0 0 0 / 0.85);
+		font-size: 1.65rem;
+		font-weight: 700;
+	}
+
+	:global(.dark) .pz-gate h1 {
+		color: rgb(255 255 255 / 0.9);
+	}
+
+	.pz-gate > p {
+		margin-top: 0.4rem;
+		color: rgb(0 0 0 / 0.48);
+	}
+
+	:global(.dark) .pz-gate > p {
+		color: rgb(255 255 255 / 0.48);
+	}
+
+	.pz-password-form {
+		width: min(100%, 24rem);
+		margin-top: 1.5rem;
+		text-align: left;
+	}
+
+	.pz-password-form label {
+		display: block;
+		margin: 0 0 0.45rem 0.15rem;
+		color: rgb(0 0 0 / 0.62);
+		font-size: 0.8rem;
+		font-weight: 700;
+	}
+
+	:global(.dark) .pz-password-form label {
+		color: rgb(255 255 255 / 0.62);
+	}
+
+	.pz-password-row {
+		display: flex;
+		gap: 0.55rem;
+	}
+
+	.pz-password-row input {
+		min-width: 0;
+		flex: 1;
+		border: 1px solid rgb(0 0 0 / 0.1);
+		border-radius: 0.75rem;
+		outline: none;
+		padding: 0.7rem 0.9rem;
+		color: rgb(0 0 0 / 0.8);
+		background: var(--page-bg);
+		transition: border-color 150ms ease, box-shadow 150ms ease;
+	}
+
+	:global(.dark) .pz-password-row input {
+		border-color: rgb(255 255 255 / 0.1);
+		color: rgb(255 255 255 / 0.82);
+	}
+
+	.pz-password-row input:focus {
+		border-color: var(--primary);
+		box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 18%, transparent);
+	}
+
+	.pz-password-row button {
+		border-radius: 0.75rem;
+		padding: 0.7rem 1.15rem;
+		color: white;
+		font-weight: 700;
+		background: var(--primary);
+		transition: filter 150ms ease, transform 150ms ease;
+	}
+
+	.pz-password-row button:hover {
+		filter: brightness(1.04);
+	}
+
+	.pz-password-row button:active {
+		transform: scale(0.96);
+	}
+
+	.pz-password-row button:disabled {
+		opacity: 0.55;
+	}
+
+	.pz-password-status {
+		min-height: 1.25rem;
+		margin: 0.45rem 0.2rem 0;
+		color: oklch(0.62 0.2 25);
+		font-size: 0.78rem;
+	}
+
+	.pz-content {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.pz-intro-card {
+		padding: 1.25rem 1.5rem;
+	}
+
+	.pz-intro-card p {
+		color: rgb(0 0 0 / 0.76);
+		font-size: 1rem;
+		font-weight: 600;
+	}
+
+	:global(.dark) .pz-intro-card p {
+		color: rgb(255 255 255 / 0.78);
+	}
+
+	.pz-gallery {
+		display: flex;
+		width: 100%;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	:global(.pz-gallery-row) {
+		display: flex;
+		width: 100%;
+		align-items: flex-start;
+		justify-content: flex-start;
+	}
+
+	.pz-gallery-item {
+		position: relative;
+		min-width: 0;
+		flex: 0 0 auto;
+		overflow: hidden;
+		border-radius: 0.9rem;
+		box-shadow: 0 0.2rem 0.8rem rgb(0 0 0 / 0.08);
+		background: var(--card-bg);
+	}
+
+	.pz-image-button {
+		position: relative;
+		display: block;
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
+		text-align: left;
+	}
+
+	.pz-image-button:not(:disabled) {
+		cursor: pointer;
+	}
+
+	.pz-image-button img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		background: rgb(0 0 0 / 0.035);
+		transition: filter 220ms ease;
+	}
+
+	.pz-image-button:not(:disabled):active img {
+		filter: brightness(0.9);
+	}
+
+	.pz-hover-caption {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+		color: white;
+		font-size: clamp(0.78rem, 1.5vw, 1rem);
+		line-height: 1.5;
+		text-align: center;
+		white-space: pre-wrap;
+		opacity: 0;
+		background: rgb(0 0 0 / 0.62);
+		transition: opacity 180ms ease;
+	}
+
+	.pz-image-button:hover .pz-hover-caption,
+	.pz-image-button:focus-visible .pz-hover-caption {
+		opacity: 1;
+	}
+
+	.pz-image-button time {
+		position: absolute;
+		right: 0.55rem;
+		bottom: 0.5rem;
+		border-radius: 999px;
+		padding: 0.22rem 0.55rem;
+		color: white;
+		font-size: 0.68rem;
+		font-weight: 600;
+		line-height: 1.2;
+		background: rgb(0 0 0 / 0.54);
+		backdrop-filter: blur(6px);
+	}
+
+	.pz-empty {
+		display: flex;
+		min-height: 13rem;
+		align-items: center;
+		justify-content: center;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 2rem;
+		color: rgb(0 0 0 / 0.42);
+		text-align: center;
+	}
+
+	:global(.dark) .pz-empty {
+		color: rgb(255 255 255 / 0.42);
+	}
+
+	.pz-empty p {
+		max-width: 34rem;
+	}
+
+	.pz-empty code {
+		border-radius: 0.3rem;
+		padding: 0.12rem 0.3rem;
+		color: var(--btn-content);
+		background: var(--btn-regular-bg);
+	}
+
+	.pz-caption-dialog {
+		width: min(32rem, calc(100vw - 2rem));
+		max-height: min(70vh, 34rem);
+		border: 0;
+		border-radius: 1rem;
+		padding: 1.25rem;
+		box-shadow: 0 1.25rem 4rem rgb(0 0 0 / 0.32);
+		color: #171717;
+		background: white;
+	}
+
+	.pz-caption-dialog::backdrop {
+		background: rgb(0 0 0 / 0.62);
+		backdrop-filter: blur(2px);
+	}
+
+	.pz-dialog-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding-bottom: 0.8rem;
+		border-bottom: 1px solid rgb(0 0 0 / 0.09);
+	}
+
+	.pz-dialog-header h2 {
+		font-size: 1.05rem;
+		font-weight: 700;
+	}
+
+	.pz-dialog-header button {
+		display: flex;
+		width: 2.25rem;
+		height: 2.25rem;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.65rem;
+		background: rgb(0 0 0 / 0.055);
+	}
+
+	.pz-caption-dialog > p {
+		overflow-wrap: anywhere;
+		padding-top: 1rem;
+		line-height: 1.75;
+		white-space: pre-wrap;
+	}
+
+	@media (max-width: 639px) {
+		.pz-gate {
+			min-height: 24rem;
+			padding: 1.4rem;
+		}
+
+		.pz-password-row {
+			flex-direction: column;
+		}
+
+		.pz-password-row button {
+			width: 100%;
+		}
+
+		.pz-gallery {
+			gap: 0.5rem;
+		}
+	}
+
+	@media (hover: none) {
+		.pz-hover-caption {
+			align-items: flex-end;
+			justify-content: flex-start;
+			padding: 2.5rem 0.75rem 0.65rem;
+			font-size: 0.75rem;
+			text-align: left;
+			opacity: 1;
+			background: linear-gradient(to top, rgb(0 0 0 / 0.7), transparent 72%);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.pz-hover-caption,
+		.pz-image-button img {
+			transition: none;
+		}
+	}
+</style>

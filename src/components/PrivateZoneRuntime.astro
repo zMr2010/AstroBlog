@@ -1,0 +1,236 @@
+<script>
+	const PASSWORD_HASH = "0984e7d137408fbfe182f0f47e5b0a8a2328188243aff44a5dbaf3e42f6ba559";
+	const AUTH_EXPIRES_KEY = "private-zone-auth-expires-at";
+	const AUTH_DURATION_MS = 5 * 60 * 1000;
+	type RuntimeWindow = Window & { __privateZoneRuntimeInstalled?: boolean };
+
+	let galleryObserver: ResizeObserver | undefined;
+	let layoutFrame = 0;
+	let authExpiryTimer: number | undefined;
+
+	function getAuthExpiry(): number {
+		try {
+			const expiresAt = Number(sessionStorage.getItem(AUTH_EXPIRES_KEY));
+			return Number.isFinite(expiresAt) ? expiresAt : 0;
+		} catch {
+			return 0;
+		}
+	}
+
+	function setAuthExpiry(expiresAt: number): void {
+		try {
+			sessionStorage.setItem(AUTH_EXPIRES_KEY, String(expiresAt));
+		} catch {
+			// The current page still unlocks if session storage is unavailable.
+		}
+	}
+
+	function clearAuthExpiry(): void {
+		window.clearTimeout(authExpiryTimer);
+		authExpiryTimer = undefined;
+		try {
+			sessionStorage.removeItem(AUTH_EXPIRES_KEY);
+		} catch {
+			// Ignore unavailable storage.
+		}
+	}
+
+	async function sha256(value: string): Promise<string> {
+		const bytes = new TextEncoder().encode(value);
+		const digest = await crypto.subtle.digest("SHA-256", bytes);
+		return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+	}
+
+	function layoutGallery(gallery: HTMLElement): void {
+		const items = Array.from(gallery.querySelectorAll<HTMLElement>(".pz-gallery-item"));
+		gallery.replaceChildren(...items);
+		if (items.length === 0 || gallery.clientWidth < 1) return;
+
+		const gap = window.innerWidth < 640 ? 8 : 12;
+		const availableWidth = gallery.clientWidth;
+		const targetHeight = Math.min(230, Math.max(145, availableWidth * 0.24));
+		const ratios = items.map((item) => {
+			const image = item.querySelector<HTMLImageElement>("img");
+			const naturalRatio = image?.naturalWidth && image?.naturalHeight
+				? image.naturalWidth / image.naturalHeight
+				: Number(item.dataset.ratio) || 4 / 3;
+			return Math.min(8, Math.max(0.15, naturalRatio));
+		});
+
+		let start = 0;
+		while (start < items.length) {
+			let end = start;
+			let ratioSum = 0;
+			let idealHeight = targetHeight;
+			while (end < items.length) {
+				ratioSum += ratios[end];
+				end += 1;
+				idealHeight = (availableWidth - gap * (end - start - 1)) / ratioSum;
+				if (idealHeight <= targetHeight) break;
+			}
+
+			const isLastRow = end === items.length;
+			const rowHeight = isLastRow && idealHeight > targetHeight
+				? targetHeight
+				: Math.max(1, idealHeight);
+			const row = document.createElement("div");
+			row.className = "pz-gallery-row";
+			row.style.gap = `${gap}px`;
+			for (let index = start; index < end; index += 1) {
+				const item = items[index];
+				item.style.width = `${ratios[index] * rowHeight}px`;
+				item.style.height = `${rowHeight}px`;
+				row.append(item);
+			}
+			gallery.append(row);
+			start = end;
+		}
+	}
+
+	function scheduleGalleryLayout(gallery: HTMLElement): void {
+		cancelAnimationFrame(layoutFrame);
+		layoutFrame = requestAnimationFrame(() => layoutGallery(gallery));
+	}
+
+	function setupGallery(gallery: HTMLElement): void {
+		for (const image of gallery.querySelectorAll<HTMLImageElement>("img")) {
+			if (image.dataset.layoutListener === "true") continue;
+			image.dataset.layoutListener = "true";
+			image.addEventListener("load", () => scheduleGalleryLayout(gallery));
+			image.addEventListener("error", () => scheduleGalleryLayout(gallery));
+		}
+
+		galleryObserver?.disconnect();
+		galleryObserver = new ResizeObserver(() => scheduleGalleryLayout(gallery));
+		galleryObserver.observe(gallery);
+		scheduleGalleryLayout(gallery);
+	}
+
+	function lock(root: HTMLElement): void {
+		clearAuthExpiry();
+		root.dataset.unlocked = "false";
+		const gate = root.querySelector<HTMLElement>("[data-pz-gate]");
+		const content = root.querySelector<HTMLElement>("[data-pz-content]");
+		const input = root.querySelector<HTMLInputElement>("[data-pz-password]");
+		const status = root.querySelector<HTMLElement>("[data-pz-password-status]");
+		gate?.setAttribute("aria-hidden", "false");
+		content?.setAttribute("inert", "");
+		content?.setAttribute("aria-hidden", "true");
+		document.body.classList.remove("private-zone-unlocked");
+		document.querySelector<HTMLAudioElement>("[data-music-audio]")?.pause();
+		if (status) status.textContent = "Your five-minute access has expired. Please enter the password again.";
+		if (input) {
+			input.value = "";
+			input.focus({ preventScroll: true });
+		}
+	}
+
+	function unlock(root: HTMLElement, expiresAt: number): void {
+		root.dataset.unlocked = "true";
+		const gate = root.querySelector<HTMLElement>("[data-pz-gate]");
+		const content = root.querySelector<HTMLElement>("[data-pz-content]");
+		gate?.setAttribute("aria-hidden", "true");
+		content?.removeAttribute("inert");
+		content?.setAttribute("aria-hidden", "false");
+		document.body.classList.add("private-zone-unlocked");
+		const gallery = root.querySelector<HTMLElement>("[data-pz-gallery]");
+		if (gallery) requestAnimationFrame(() => setupGallery(gallery));
+		window.clearTimeout(authExpiryTimer);
+		authExpiryTimer = window.setTimeout(
+			() => lock(root),
+			Math.max(0, expiresAt - Date.now()),
+		);
+	}
+
+	function setupDialog(root: HTMLElement): void {
+		const dialog = root.querySelector<HTMLDialogElement>("[data-pz-dialog]");
+		const title = dialog?.querySelector<HTMLElement>("[data-pz-dialog-title]");
+		const caption = dialog?.querySelector<HTMLElement>("[data-pz-dialog-caption]");
+		if (!dialog || !title || !caption) return;
+
+		root.addEventListener("click", (event) => {
+			const target = event.target as HTMLElement;
+			const imageButton = target.closest<HTMLElement>("[data-click-caption]");
+			if (imageButton?.dataset.clickCaption) {
+				title.textContent = imageButton.dataset.clickTitle || "照片文案";
+				caption.textContent = imageButton.dataset.clickCaption;
+				dialog.showModal();
+			}
+			if (target.closest("[data-pz-dialog-close]")) dialog.close();
+		});
+
+		dialog.addEventListener("click", (event) => {
+			if (event.target !== dialog) return;
+			const rect = dialog.getBoundingClientRect();
+			const inside = event.clientX >= rect.left && event.clientX <= rect.right
+				&& event.clientY >= rect.top && event.clientY <= rect.bottom;
+			if (!inside) dialog.close();
+		});
+	}
+
+	function initPrivateZone(): void {
+		const root = document.querySelector<HTMLElement>("[data-private-zone]");
+		if (!root) {
+			document.body.classList.remove("private-zone-unlocked");
+			window.clearTimeout(authExpiryTimer);
+			authExpiryTimer = undefined;
+			galleryObserver?.disconnect();
+			return;
+		}
+		if (root.dataset.runtimeReady === "true") return;
+		document.body.classList.remove("private-zone-unlocked");
+		root.dataset.runtimeReady = "true";
+		setupDialog(root);
+
+		const form = root.querySelector<HTMLFormElement>("[data-pz-password-form]");
+		const input = form?.querySelector<HTMLInputElement>("[data-pz-password]");
+		const status = form?.querySelector<HTMLElement>("[data-pz-password-status]");
+		const storedExpiry = getAuthExpiry();
+		if (storedExpiry > Date.now()) {
+			unlock(root, storedExpiry);
+			return;
+		}
+		clearAuthExpiry();
+		input?.focus({ preventScroll: true });
+		form?.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			if (!input || !status) return;
+			const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
+			if (submit) submit.disabled = true;
+			status.textContent = "Verifying…";
+			try {
+				if (await sha256(input.value) === PASSWORD_HASH) {
+					const expiresAt = Date.now() + AUTH_DURATION_MS;
+					setAuthExpiry(expiresAt);
+					status.textContent = "";
+					input.value = "";
+					unlock(root, expiresAt);
+				} else {
+					status.textContent = "Incorrect password. Please try again.";
+					input.select();
+				}
+			} catch {
+				status.textContent = "Your browser could not verify the password. Please try a newer browser.";
+			} finally {
+				if (submit) submit.disabled = false;
+			}
+		});
+	}
+
+	function installRuntime(): void {
+		const runtimeWindow = window as RuntimeWindow;
+		if (runtimeWindow.__privateZoneRuntimeInstalled) {
+			initPrivateZone();
+			return;
+		}
+		runtimeWindow.__privateZoneRuntimeInstalled = true;
+		initPrivateZone();
+		const attachSwupHook = () => {
+			window.swup?.hooks.on("page:view", () => requestAnimationFrame(initPrivateZone));
+		};
+		if (window.swup?.hooks) attachSwupHook();
+		else document.addEventListener("swup:enable", attachSwupHook, { once: true });
+	}
+
+	installRuntime();
+</script>

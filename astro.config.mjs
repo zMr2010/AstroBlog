@@ -6,6 +6,7 @@ import { pluginLineNumbers } from "@expressive-code/plugin-line-numbers";
 import swup from "@swup/astro";
 import expressiveCode from "astro-expressive-code";
 import icon from "astro-icon";
+import yaml from "@rollup/plugin-yaml";
 import { defineConfig } from "astro/config";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypeComponents from "rehype-components"; /* Render the custom directive content */
@@ -38,7 +39,7 @@ export default defineConfig({
 			animationClass: "transition-swup-", // see https://swup.js.org/options/#animationselector
 			// the default value `transition-` cause transition delay
 			// when the Tailwind class `transition-all` is used
-			containers: ["main", "#toc"],
+			containers: ["main", "#toc", "#sidebar"],
 			smoothScrolling: true,
 			cache: true,
 			preload: true,
@@ -154,6 +155,7 @@ export default defineConfig({
 		],
 	},
 	vite: {
+		plugins: [yaml()],
 		build: {
 			rollupOptions: {
 				onwarn(warning, warn) {

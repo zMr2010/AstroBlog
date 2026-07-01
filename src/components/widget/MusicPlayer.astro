@@ -1,0 +1,374 @@
+---
+import { Icon } from "astro-icon/components";
+import { privateZoneConfig } from "../../utils/private-zone";
+
+const tracks = privateZoneConfig.music;
+const hasTracks = tracks.length > 0;
+const firstTrack = tracks[0];
+---
+
+<div class="pz-music-player" data-music-player data-has-tracks={String(hasTracks)}>
+	<audio
+		data-music-audio
+		preload="metadata"
+		src={firstTrack?.src}
+	></audio>
+
+	<div class="pz-music-card card-base p-4" data-player-surface data-playing="false">
+		<div class="mb-3 flex items-center gap-2">
+			<div class="pz-music-mark">
+				<Icon name="material-symbols:music-note-rounded" class="text-[1.25rem]"></Icon>
+			</div>
+			<div class="min-w-0">
+				<div class="text-75 text-sm font-bold">私人电台</div>
+				<div class="pz-track-line text-50 text-xs" title={firstTrack?.title}>
+					<span data-track-title>{firstTrack?.title ?? "暂未配置背景音乐"}</span>
+					<span data-track-artist>{firstTrack?.artist ? ` · ${firstTrack.artist}` : ""}</span>
+				</div>
+			</div>
+		</div>
+		<div class="flex items-center justify-center gap-2">
+			<button class="pz-control" type="button" data-music-action="previous" aria-label="上一首" disabled={!hasTracks}>
+				<Icon name="material-symbols:skip-previous-rounded" class="text-[1.4rem]"></Icon>
+			</button>
+			<button class="pz-control pz-play-control" type="button" data-music-action="toggle" aria-label="播放背景音乐" disabled={!hasTracks}>
+				<Icon name="material-symbols:play-arrow-rounded" class="pz-play-icon text-[1.55rem]"></Icon>
+				<Icon name="material-symbols:pause-rounded" class="pz-pause-icon text-[1.55rem]"></Icon>
+			</button>
+			<button class="pz-control" type="button" data-music-action="next" aria-label="下一首" disabled={!hasTracks}>
+				<Icon name="material-symbols:skip-next-rounded" class="text-[1.4rem]"></Icon>
+			</button>
+		</div>
+	</div>
+
+	<div class="pz-music-float" data-music-float data-player-surface data-playing="false" data-open="false">
+		<div class="pz-float-panel" aria-label="背景音乐控制">
+			<div class="pz-float-title" data-track-title>{firstTrack?.title ?? "暂无音乐"}</div>
+			<button class="pz-float-control" type="button" data-music-action="previous" aria-label="上一首" disabled={!hasTracks}>
+				<Icon name="material-symbols:skip-previous-rounded" class="text-[1.25rem]"></Icon>
+			</button>
+			<button class="pz-float-control" type="button" data-music-action="toggle" aria-label="播放背景音乐" disabled={!hasTracks}>
+				<Icon name="material-symbols:play-arrow-rounded" class="pz-play-icon text-[1.35rem]"></Icon>
+				<Icon name="material-symbols:pause-rounded" class="pz-pause-icon text-[1.35rem]"></Icon>
+			</button>
+			<button class="pz-float-control" type="button" data-music-action="next" aria-label="下一首" disabled={!hasTracks}>
+				<Icon name="material-symbols:skip-next-rounded" class="text-[1.25rem]"></Icon>
+			</button>
+		</div>
+		<button
+			class="pz-music-ball"
+			type="button"
+			data-music-action="menu"
+			aria-label="展开背景音乐控制"
+			aria-expanded="false"
+			disabled={!hasTracks}
+		>
+			<Icon name="material-symbols:music-note-rounded" class="text-[1.55rem]"></Icon>
+		</button>
+	</div>
+
+	<div class="hidden" aria-hidden="true">
+		{tracks.map((track) => (
+			<span data-music-track data-src={track.src} data-title={track.title} data-artist={track.artist}></span>
+		))}
+	</div>
+</div>
+
+<style>
+	.pz-music-card {
+		display: none;
+		border: 1px solid rgb(0 0 0 / 0.04);
+	}
+
+	:global(body:not(.private-zone-unlocked)) .pz-music-player,
+	:global(body:not(.private-zone-unlocked)) .pz-music-float {
+		display: none !important;
+	}
+
+	:global(.dark) .pz-music-card {
+		border-color: rgb(255 255 255 / 0.06);
+	}
+
+	.pz-music-mark {
+		display: flex;
+		width: 2rem;
+		height: 2rem;
+		flex: 0 0 auto;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.65rem;
+		background: var(--btn-regular-bg);
+		color: var(--primary);
+	}
+
+	.pz-track-line {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.pz-control,
+	.pz-float-control {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.7rem;
+		color: var(--btn-content);
+		background: var(--btn-regular-bg);
+		transition: transform 150ms ease, background-color 150ms ease;
+	}
+
+	.pz-control {
+		width: 2.5rem;
+		height: 2.5rem;
+	}
+
+	.pz-control:hover,
+	.pz-float-control:hover {
+		background: var(--btn-regular-bg-hover);
+	}
+
+	.pz-control:active,
+	.pz-float-control:active {
+		transform: scale(0.92);
+	}
+
+	.pz-control:disabled,
+	.pz-float-control:disabled,
+	.pz-music-ball:disabled {
+		cursor: not-allowed;
+		opacity: 0.4;
+	}
+
+	.pz-pause-icon {
+		display: none;
+	}
+
+	[data-player-surface][data-playing="true"] .pz-play-icon {
+		display: none;
+	}
+
+	[data-player-surface][data-playing="true"] .pz-pause-icon {
+		display: block;
+	}
+
+	.pz-music-float {
+		position: fixed;
+		top: 54%;
+		right: max(0.75rem, env(safe-area-inset-right));
+		z-index: 60;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		transform: translateY(-50%);
+	}
+
+	.pz-music-ball {
+		display: flex;
+		width: 3.25rem;
+		height: 3.25rem;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid rgb(255 255 255 / 0.38);
+		border-radius: 999px;
+		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.2);
+		color: white;
+		background: var(--primary);
+		transition: transform 180ms ease, box-shadow 180ms ease;
+	}
+
+	.pz-music-ball:hover {
+		transform: scale(1.06);
+		box-shadow: 0 0.65rem 1.75rem rgb(0 0 0 / 0.25);
+	}
+
+	[data-playing="true"] .pz-music-ball :global(svg) {
+		animation: pz-music-pulse 1.8s ease-in-out infinite;
+	}
+
+	.pz-float-panel {
+		display: flex;
+		max-width: 0;
+		align-items: center;
+		gap: 0.35rem;
+		overflow: hidden;
+		border: 1px solid rgb(0 0 0 / 0.08);
+		border-radius: 999px;
+		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.16);
+		opacity: 0;
+		background: var(--card-bg);
+		transform: translateX(0.75rem) scale(0.96);
+		transform-origin: right center;
+		transition: max-width 220ms ease, padding 220ms ease, opacity 180ms ease, transform 220ms ease;
+	}
+
+	.pz-music-float[data-open="true"] .pz-float-panel {
+		max-width: min(19rem, calc(100vw - 5rem));
+		padding: 0.45rem;
+		opacity: 1;
+		transform: translateX(0) scale(1);
+	}
+
+	.pz-float-title {
+		max-width: 8rem;
+		overflow: hidden;
+		padding-left: 0.35rem;
+		color: rgb(0 0 0 / 0.72);
+		font-size: 0.75rem;
+		font-weight: 700;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	:global(.dark) .pz-float-title {
+		color: rgb(255 255 255 / 0.75);
+	}
+
+	.pz-float-control {
+		width: 2.25rem;
+		height: 2.25rem;
+		flex: 0 0 auto;
+	}
+
+	@keyframes pz-music-pulse {
+		0%, 100% { transform: scale(1); }
+		50% { transform: scale(1.18); }
+	}
+
+	@media (min-width: 1024px) {
+		.pz-music-card {
+			display: block;
+		}
+
+		.pz-music-float {
+			display: none;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		[data-playing="true"] .pz-music-ball :global(svg) {
+			animation: none;
+		}
+	}
+</style>
+
+<script>
+	type Track = { src: string; title: string; artist: string };
+
+	function initMusicPlayer() {
+		const root = document.querySelector<HTMLElement>("[data-music-player]");
+		if (!root || root.dataset.ready === "true") return;
+		root.dataset.ready = "true";
+
+		const audio = root.querySelector<HTMLAudioElement>("[data-music-audio]");
+		const floating = root.querySelector<HTMLElement>("[data-music-float]");
+		const trackNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-music-track]"));
+		const titleNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-track-title]"));
+		const artistNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-track-artist]"));
+		const tracks: Track[] = trackNodes.map((node) => ({
+			src: node.dataset.src ?? "",
+			title: node.dataset.title ?? "Untitled",
+			artist: node.dataset.artist ?? "",
+		}));
+		if (!audio || !floating) return;
+
+		let currentIndex = 0;
+		try {
+			const storedIndex = Number(localStorage.getItem("private-zone-music-index"));
+			if (Number.isInteger(storedIndex) && storedIndex >= 0 && storedIndex < tracks.length) {
+				currentIndex = storedIndex;
+			}
+		} catch {
+			// Storage may be disabled; the player still works for this page load.
+		}
+
+		const setPlayingState = (playing: boolean) => {
+			for (const surface of document.querySelectorAll<HTMLElement>("[data-player-surface]")) {
+				surface.dataset.playing = String(playing);
+				const toggle = surface.querySelector<HTMLButtonElement>("[data-music-action='toggle']");
+				if (toggle) toggle.ariaLabel = playing ? "暂停背景音乐" : "播放背景音乐";
+			}
+		};
+
+		const play = async () => {
+			if (tracks.length === 0) return;
+			try {
+				await audio.play();
+			} catch {
+				setPlayingState(false);
+			}
+		};
+
+		const setTrack = (index: number, shouldPlay = false) => {
+			if (tracks.length === 0) return;
+			currentIndex = (index + tracks.length) % tracks.length;
+			const track = tracks[currentIndex];
+			audio.src = track.src;
+			audio.load();
+			for (const node of titleNodes) node.textContent = track.title;
+			for (const node of artistNodes) node.textContent = track.artist ? ` · ${track.artist}` : "";
+			try {
+				localStorage.setItem("private-zone-music-index", String(currentIndex));
+			} catch {
+				// Ignore unavailable storage.
+			}
+			if (shouldPlay) void play();
+		};
+
+		if (tracks.length > 0) setTrack(currentIndex);
+
+		for (const button of root.querySelectorAll<HTMLButtonElement>("[data-music-action]")) {
+			button.addEventListener("click", () => {
+				const action = button.dataset.musicAction;
+				if (action === "menu") {
+					const open = floating.dataset.open !== "true";
+					floating.dataset.open = String(open);
+					button.ariaExpanded = String(open);
+					return;
+				}
+				if (action === "toggle") {
+					if (audio.paused) void play();
+					else audio.pause();
+					return;
+				}
+				const wasPlaying = !audio.paused;
+				if (action === "previous") setTrack(currentIndex - 1, wasPlaying);
+				if (action === "next") setTrack(currentIndex + 1, wasPlaying);
+			});
+		}
+
+		audio.addEventListener("play", () => setPlayingState(true));
+		audio.addEventListener("pause", () => setPlayingState(false));
+		audio.addEventListener("ended", () => setTrack(currentIndex + 1, true));
+
+		document.addEventListener("click", (event) => {
+			if (floating.dataset.open !== "true" || floating.contains(event.target as Node)) return;
+			floating.dataset.open = "false";
+			const menuButton = floating.querySelector<HTMLButtonElement>("[data-music-action='menu']");
+			if (menuButton) menuButton.ariaExpanded = "false";
+		});
+
+		const media = window.matchMedia("(max-width: 1023px)");
+		const placeFloatingPlayer = () => {
+			if (media.matches) document.body.append(floating);
+			else root.append(floating);
+		};
+		placeFloatingPlayer();
+		media.addEventListener("change", placeFloatingPlayer);
+		const attachSwupHook = () => {
+			window.swup?.hooks.on(
+				"content:replace",
+				() => {
+					// On narrow screens the floating controls live under <body>.
+					// Return them before Swup removes #sidebar so no player survives P.Z.
+					if (floating.parentElement !== root) root.append(floating);
+				},
+				{ before: true },
+			);
+		};
+		if (window.swup?.hooks) attachSwupHook();
+		else document.addEventListener("swup:enable", attachSwupHook, { once: true });
+	}
+
+	initMusicPlayer();
+</script>

@@ -1,0 +1,103 @@
+# Private Zone 内容配置
+#
+# 图片放在 public/private-zone/images/，音乐放在 public/private-zone/music/。
+# 修改本文件后重新构建站点即可。日期会自动按从新到旧排序。
+
+intro: P.Z. 是 Private Zone 的缩写。记录生活中的点滴……这何尝不是一种《半岛铁盒》
+
+gallery: 
+  - image: Blade.png
+    date: 2026-06-04
+    alt: 千冶成刃
+    hover: 神即道，道法自然，如来
+    click: 神即道，道法自然，如来
+  - image: 20260620.jpg
+    date: 2026-06-20
+    alt: 长桌宴
+    hover: 为什么用丝带挡着脸呢
+    click: 还偷偷看镜头
+  - image: 20260626.jpg
+    date: 2026-06-26
+    alt: 中考结束
+    hover: 中考结束啦
+    click: 依旧挡脸，看我笑得多开心
+  - image: 20260627.jpg
+    date: 2026-06-27
+    alt: 好好拍一张
+    hover: 妳说今天好好拍一张
+    click: 别急下一张不挡脸
+  - image: 20260627-2.jpg
+    date: 2026-06-27
+    alt: 不挡脸啦
+    hover: 有点小曝光
+    click: 高兴
+  - image: 20260628.jpg
+    date: 2026-06-28
+    alt: 妳发给我的照片
+    hover: 妳发给我的照片
+    click: 非常可爱
+  - image: 20260628-2.jpg
+    alt: 一起走到校门口
+    hover: 谢谢庞xx的拍立得
+    click: 珍藏中
+  - image: 20260629.jpg
+    date: 2026-06-29
+    alt: 体育馆
+    hover: 这是我们在学校的最后一天
+    click: 这是我们在学校的最后一天
+  - image: 20260629-2.jpg
+    date: 2026-06-29
+    alt: 玩手机
+    hover: 刷什么视频呢，来玩蛋仔
+    click: 刷什么视频呢，来玩蛋仔
+  - image: 20260629-3.jpg
+    date: 2026-06-29
+    alt: 贴扇子
+    hover: "表演要用的扇子，本来说要给你带 502 没买到"
+    click: "表演要用的扇子，本来说要给你带 502 没买到"
+  - image: 20260629-4.jpg
+    date: 2026-06-29
+    alt: "毕业晚会开始"
+    hover: "是的被家长硬控导致来晚了，化妆非常好看"
+    click: "是的被家长硬控导致来晚了，化妆非常好看"
+  - image: 20260629-5.jpg
+    date: 2026-06-29
+    alt: "整理衣服"
+    hover: "拍了好几张觉得这张表情最有趣"
+    click: "拍了好几张觉得这张表情最有趣"
+  - image: 20260629-6.jpg
+    date: 2026-06-29
+    alt: "自拍"
+    hover: "对着手机自拍的表情也很有趣"
+    click: "对着手机自拍的表情也很有趣"
+  - image: 20260629-7.jpg
+    date: 2026-06-29
+    alt: "自拍 2.0"
+    hover: ""
+    click: ""
+  - image: 20260629-8.jpg
+    date: 2026-06-29
+    alt: "班级节目"
+    hover: "换上自己的衣服也很好，我说妳今天的头发好看炸了"
+    click: "该什么时候才能再见面呢"
+# gallery:
+#   - image: example-landscape.jpg
+#     date: 2026-06-30
+#     alt: 示例照片
+#     hover: 鼠标悬停时显示的文字
+#     click: 点击照片后在弹窗中显示的文字
+#     # width 与 height 可选；填写后可减少图片加载前的排版跳动。
+#     width: 1920
+#     height: 1080
+
+music: 
+  - file: 雀跃.mp3
+    title: 雀跃
+    artist: 任然 / 小来
+  - file: 有我呢.mp3
+    title: 有我呢
+    artist: 郭一凡
+# music:
+#   - file: example.mp3
+#     title: 歌曲标题
+#     artist: 歌手或备注

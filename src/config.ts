@@ -45,6 +45,10 @@ export const navBarConfig: NavBarConfig = {
 		LinkPreset.Archive,
 		LinkPreset.Faqs,
 		LinkPreset.About,
+		{
+			name: "P.Z.",
+			url: "/private-zone/",
+		},
 		// {
 		// 	name: "GitHub",
 		// 	url: "https://github.com/saicaca/fuwari", // Internal links should not include the base path, as it is automatically added
