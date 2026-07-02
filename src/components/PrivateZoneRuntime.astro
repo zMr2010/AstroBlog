@@ -1,37 +1,24 @@
 <script>
 	const PASSWORD_HASH = "0984e7d137408fbfe182f0f47e5b0a8a2328188243aff44a5dbaf3e42f6ba559";
-	const AUTH_EXPIRES_KEY = "private-zone-auth-expires-at";
-	const AUTH_DURATION_MS = 5 * 60 * 1000;
+	const AUTH_STORAGE_KEY = "private-zone-authenticated-v2";
 	type RuntimeWindow = Window & { __privateZoneRuntimeInstalled?: boolean };
 
 	let galleryObserver: ResizeObserver | undefined;
 	let layoutFrame = 0;
-	let authExpiryTimer: number | undefined;
 
-	function getAuthExpiry(): number {
+	function hasStoredAccess(): boolean {
 		try {
-			const expiresAt = Number(sessionStorage.getItem(AUTH_EXPIRES_KEY));
-			return Number.isFinite(expiresAt) ? expiresAt : 0;
+			return localStorage.getItem(AUTH_STORAGE_KEY) === "true";
 		} catch {
-			return 0;
+			return false;
 		}
 	}
 
-	function setAuthExpiry(expiresAt: number): void {
+	function storeAccess(): void {
 		try {
-			sessionStorage.setItem(AUTH_EXPIRES_KEY, String(expiresAt));
+			localStorage.setItem(AUTH_STORAGE_KEY, "true");
 		} catch {
-			// The current page still unlocks if session storage is unavailable.
-		}
-	}
-
-	function clearAuthExpiry(): void {
-		window.clearTimeout(authExpiryTimer);
-		authExpiryTimer = undefined;
-		try {
-			sessionStorage.removeItem(AUTH_EXPIRES_KEY);
-		} catch {
-			// Ignore unavailable storage.
+			// The current page still unlocks if persistent storage is unavailable.
 		}
 	}
 
@@ -106,26 +93,35 @@
 		scheduleGalleryLayout(gallery);
 	}
 
-	function lock(root: HTMLElement): void {
-		clearAuthExpiry();
-		root.dataset.unlocked = "false";
-		const gate = root.querySelector<HTMLElement>("[data-pz-gate]");
-		const content = root.querySelector<HTMLElement>("[data-pz-content]");
-		const input = root.querySelector<HTMLInputElement>("[data-pz-password]");
-		const status = root.querySelector<HTMLElement>("[data-pz-password-status]");
-		gate?.setAttribute("aria-hidden", "false");
-		content?.setAttribute("inert", "");
-		content?.setAttribute("aria-hidden", "true");
-		document.body.classList.remove("private-zone-unlocked");
-		document.querySelector<HTMLAudioElement>("[data-music-audio]")?.pause();
-		if (status) status.textContent = "Your five-minute access has expired. Please enter the password again.";
-		if (input) {
-			input.value = "";
-			input.focus({ preventScroll: true });
+	function getPrivateZoneAssetUrls(root: HTMLElement): string[] {
+		const sources = [
+			...Array.from(root.querySelectorAll<HTMLImageElement>("img"), (image) => image.src),
+			...Array.from(
+				document.querySelectorAll<HTMLElement>("[data-music-track]"),
+				(track) => track.dataset.src || "",
+			),
+		];
+		return Array.from(new Set(sources))
+			.map((source) => new URL(source, window.location.href))
+			.filter((assetUrl) => assetUrl.origin === window.location.origin)
+			.map((assetUrl) => assetUrl.href);
+	}
+
+	async function cachePrivateZoneAssets(root: HTMLElement): Promise<void> {
+		if (!("serviceWorker" in navigator)) return;
+		const urls = getPrivateZoneAssetUrls(root);
+		if (urls.length === 0) return;
+		try {
+			const base = import.meta.env.BASE_URL;
+			await navigator.serviceWorker.register(`${base}private-zone-sw.js`, { scope: base });
+			const registration = await navigator.serviceWorker.ready;
+			registration.active?.postMessage({ type: "CACHE_PRIVATE_ZONE_ASSETS", urls });
+		} catch (error) {
+			console.warn("Private Zone media caching is unavailable.", error);
 		}
 	}
 
-	function unlock(root: HTMLElement, expiresAt: number): void {
+	function unlock(root: HTMLElement): void {
 		root.dataset.unlocked = "true";
 		const gate = root.querySelector<HTMLElement>("[data-pz-gate]");
 		const content = root.querySelector<HTMLElement>("[data-pz-content]");
@@ -135,11 +131,7 @@
 		document.body.classList.add("private-zone-unlocked");
 		const gallery = root.querySelector<HTMLElement>("[data-pz-gallery]");
 		if (gallery) requestAnimationFrame(() => setupGallery(gallery));
-		window.clearTimeout(authExpiryTimer);
-		authExpiryTimer = window.setTimeout(
-			() => lock(root),
-			Math.max(0, expiresAt - Date.now()),
-		);
+		void cachePrivateZoneAssets(root);
 	}
 
 	function setupDialog(root: HTMLElement): void {
@@ -172,8 +164,6 @@
 		const root = document.querySelector<HTMLElement>("[data-private-zone]");
 		if (!root) {
 			document.body.classList.remove("private-zone-unlocked");
-			window.clearTimeout(authExpiryTimer);
-			authExpiryTimer = undefined;
 			galleryObserver?.disconnect();
 			return;
 		}
@@ -185,12 +175,10 @@
 		const form = root.querySelector<HTMLFormElement>("[data-pz-password-form]");
 		const input = form?.querySelector<HTMLInputElement>("[data-pz-password]");
 		const status = form?.querySelector<HTMLElement>("[data-pz-password-status]");
-		const storedExpiry = getAuthExpiry();
-		if (storedExpiry > Date.now()) {
-			unlock(root, storedExpiry);
+		if (hasStoredAccess()) {
+			unlock(root);
 			return;
 		}
-		clearAuthExpiry();
 		input?.focus({ preventScroll: true });
 		form?.addEventListener("submit", async (event) => {
 			event.preventDefault();
@@ -200,11 +188,10 @@
 			status.textContent = "Verifying…";
 			try {
 				if (await sha256(input.value) === PASSWORD_HASH) {
-					const expiresAt = Date.now() + AUTH_DURATION_MS;
-					setAuthExpiry(expiresAt);
+					storeAccess();
 					status.textContent = "";
 					input.value = "";
-					unlock(root, expiresAt);
+					unlock(root);
 				} else {
 					status.textContent = "Incorrect password. Please try again.";
 					input.select();
