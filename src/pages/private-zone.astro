@@ -54,10 +54,10 @@ const { intro, gallery } = privateZoneConfig;
 							<button
 								type="button"
 								class="pz-image-button"
-								data-click-caption={item.clickCaption || undefined}
-								data-click-title={item.clickCaption ? item.alt : undefined}
-								aria-label={item.clickCaption ? `查看图片文案：${item.alt}` : undefined}
-								disabled={!item.clickCaption}
+								data-click-src={item.src}
+								data-click-caption={item.clickCaption}
+								data-click-title={item.alt}
+								aria-label={`放大查看图片：${item.alt}`}
 							>
 								<img src={item.src} alt={item.alt} loading="lazy" decoding="async" />
 								{item.hoverCaption && (
@@ -82,7 +82,10 @@ const { intro, gallery } = privateZoneConfig;
 						<Icon name="material-symbols:close-rounded" class="text-[1.5rem]"></Icon>
 					</button>
 				</div>
-				<p data-pz-dialog-caption></p>
+				<figure class="pz-dialog-figure">
+					<img data-pz-dialog-image alt="" />
+					<figcaption data-pz-dialog-caption></figcaption>
+				</figure>
 			</dialog>
 		</div>
 	</section>
@@ -266,7 +269,7 @@ const { intro, gallery } = privateZoneConfig;
 		text-align: left;
 	}
 
-	.pz-image-button:not(:disabled) {
+	.pz-image-button {
 		cursor: pointer;
 	}
 
@@ -279,7 +282,7 @@ const { intro, gallery } = privateZoneConfig;
 		transition: filter 220ms ease;
 	}
 
-	.pz-image-button:not(:disabled):active img {
+	.pz-image-button:active img {
 		filter: brightness(0.9);
 	}
 
@@ -347,8 +350,9 @@ const { intro, gallery } = privateZoneConfig;
 	}
 
 	.pz-caption-dialog {
-		width: min(32rem, calc(100vw - 2rem));
-		max-height: min(70vh, 34rem);
+		width: min(56rem, calc(100vw - 2rem));
+		max-height: min(88vh, 52rem);
+		overflow: auto;
 		border: 0;
 		border-radius: 1rem;
 		padding: 1.25rem;
@@ -386,11 +390,29 @@ const { intro, gallery } = privateZoneConfig;
 		background: rgb(0 0 0 / 0.055);
 	}
 
-	.pz-caption-dialog > p {
+	.pz-dialog-figure {
+		margin: 0;
+		padding-top: 1rem;
+	}
+
+	.pz-dialog-figure img {
+		display: block;
+		width: 100%;
+		max-height: min(68vh, 38rem);
+		border-radius: 0.8rem;
+		object-fit: contain;
+		background: rgb(0 0 0 / 0.045);
+	}
+
+	.pz-dialog-figure figcaption {
 		overflow-wrap: anywhere;
 		padding-top: 1rem;
 		line-height: 1.75;
 		white-space: pre-wrap;
+	}
+
+	.pz-dialog-figure figcaption:empty {
+		display: none;
 	}
 
 	@media (max-width: 639px) {

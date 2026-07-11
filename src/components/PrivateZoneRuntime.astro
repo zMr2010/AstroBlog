@@ -137,18 +137,33 @@
 	function setupDialog(root: HTMLElement): void {
 		const dialog = root.querySelector<HTMLDialogElement>("[data-pz-dialog]");
 		const title = dialog?.querySelector<HTMLElement>("[data-pz-dialog-title]");
+		const dialogImage = dialog?.querySelector<HTMLImageElement>("[data-pz-dialog-image]");
 		const caption = dialog?.querySelector<HTMLElement>("[data-pz-dialog-caption]");
-		if (!dialog || !title || !caption) return;
+		if (!dialog || !title || !dialogImage || !caption) return;
 
 		root.addEventListener("click", (event) => {
 			const target = event.target as HTMLElement;
-			const imageButton = target.closest<HTMLElement>("[data-click-caption]");
-			if (imageButton?.dataset.clickCaption) {
-				title.textContent = imageButton.dataset.clickTitle || "照片文案";
-				caption.textContent = imageButton.dataset.clickCaption;
+			const imageButton = target.closest<HTMLElement>("[data-click-src]");
+			if (imageButton) {
+				const imageSrc = imageButton.dataset.clickSrc || imageButton.querySelector<HTMLImageElement>("img")?.src || "";
+				const imageTitle = imageButton.dataset.clickTitle || "Private Zone photo";
+				const clickCaption = imageButton.dataset.clickCaption || "";
+				if (!imageSrc) return;
+				title.textContent = imageTitle;
+				dialogImage.src = imageSrc;
+				dialogImage.alt = imageTitle;
+				caption.textContent = clickCaption;
+				caption.hidden = !clickCaption;
 				dialog.showModal();
 			}
 			if (target.closest("[data-pz-dialog-close]")) dialog.close();
+		});
+
+		dialog.addEventListener("close", () => {
+			dialogImage.removeAttribute("src");
+			dialogImage.alt = "";
+			caption.textContent = "";
+			caption.hidden = true;
 		});
 
 		dialog.addEventListener("click", (event) => {
