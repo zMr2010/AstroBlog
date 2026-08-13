@@ -1,0 +1,571 @@
+---
+import "@waline/client/style";
+
+const DEFAULT_SERVER_URL = "https://waline-zmr2010s-projects.vercel.app";
+const serverURL = (
+	import.meta.env.PUBLIC_WALINE_SERVER_URL || DEFAULT_SERVER_URL
+).replace(/\/+$/, "");
+---
+
+<div
+	id="waline-chat-shell"
+	class="token-runtime-pending"
+	data-server-url={serverURL}
+	data-pagefind-ignore="all"
+>
+	<div id="waline-token-gate" class="token-gate">
+		<form
+			id="waline-token-form"
+			class="token-form"
+			autocomplete="off"
+			novalidate
+		>
+			<div class="token-copy">
+				<p class="token-eyebrow">Token room</p>
+				<h2>输入 Chat Token</h2>
+				<p>相同的 Token 会进入同一个独立聊天室。</p>
+			</div>
+
+			<label for="waline-room-token">Room Token</label>
+			<div class="token-field-row">
+				<input
+					id="waline-room-token"
+					name="chat-token"
+					type="password"
+					required
+					inputmode="numeric"
+					pattern="[0-9]+"
+					autocomplete="off"
+					autocapitalize="none"
+					spellcheck="false"
+					placeholder="请输入任意位数的数字 Token"
+					aria-describedby="waline-token-hint waline-token-status"
+				/>
+				<button id="waline-token-submit" type="submit">进入 Chat</button>
+			</div>
+			<p id="waline-token-hint" class="token-hint">
+				仅允许数字 0–9，前导零会保留。短数字容易被猜中，建议使用 39
+				位随机数字；原始 Token 不会写入 URL 或本地存储。
+			</p>
+			<p
+				id="waline-token-status"
+				class="token-status"
+				role="status"
+				aria-live="polite"
+				aria-atomic="true"
+			></p>
+		</form>
+	</div>
+
+	<div id="waline-room" role="region" aria-label="Token Chat 房间" hidden>
+		<div class="room-toolbar">
+			<p>
+				<span>当前 Token 房间</span>
+				<code id="waline-room-fingerprint"></code>
+			</p>
+			<button id="waline-room-switch" type="button">切换房间</button>
+		</div>
+		<div id="waline-chat" aria-label="Token-routed chat messages"></div>
+	</div>
+</div>
+
+<noscript>
+	<p class="waline-notice">请启用 JavaScript 以输入 Token 并进入聊天室。</p>
+</noscript>
+
+<style>
+	#waline-chat-shell {
+		min-height: 19rem;
+	}
+
+	#waline-chat-shell.token-runtime-pending {
+		display: none;
+	}
+
+	#waline-chat-shell [hidden] {
+		display: none !important;
+	}
+
+	.token-gate {
+		display: grid;
+		min-height: 19rem;
+		place-items: center;
+	}
+
+	.token-form {
+		width: min(100%, 34rem);
+		padding: 1.5rem;
+		border: 1px solid var(--line-divider);
+		border-radius: 1rem;
+		background: var(--btn-regular-bg);
+	}
+
+	.token-copy {
+		margin-bottom: 1.25rem;
+	}
+
+	.token-copy h2 {
+		margin: 0.15rem 0 0;
+		color: rgb(0 0 0 / 0.9);
+		font-size: 1.35rem;
+		font-weight: 700;
+	}
+
+	.token-copy > p:last-child {
+		margin: 0.45rem 0 0;
+		color: rgb(0 0 0 / 0.55);
+		line-height: 1.6;
+	}
+
+	.token-eyebrow {
+		margin: 0;
+		color: var(--primary);
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.token-form label {
+		display: block;
+		margin-bottom: 0.5rem;
+		color: rgb(0 0 0 / 0.75);
+		font-size: 0.875rem;
+		font-weight: 600;
+	}
+
+	.token-field-row {
+		display: flex;
+		gap: 0.75rem;
+	}
+
+	.token-field-row input {
+		min-width: 0;
+		flex: 1;
+		padding: 0.75rem 0.9rem;
+		border: 1px solid var(--line-divider);
+		border-radius: 0.65rem;
+		outline: none;
+		background: var(--card-bg);
+		color: rgb(0 0 0 / 0.9);
+		transition: border-color 150ms ease, box-shadow 150ms ease;
+	}
+
+	.token-field-row input:focus {
+		border-color: var(--primary);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+	}
+
+	.token-field-row button,
+	.room-toolbar button {
+		border: 1px solid var(--primary);
+		border-radius: 0.65rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: opacity 150ms ease, transform 150ms ease,
+			background-color 150ms ease;
+	}
+
+	.token-field-row button {
+		padding: 0.75rem 1.15rem;
+		background: var(--primary);
+		color: white;
+	}
+
+	.token-field-row button:hover,
+	.room-toolbar button:hover {
+		opacity: 0.85;
+	}
+
+	.token-field-row button:active,
+	.room-toolbar button:active {
+		transform: scale(0.97);
+	}
+
+	.token-field-row button:disabled {
+		opacity: 0.55;
+		cursor: wait;
+	}
+
+	.token-hint,
+	.token-status {
+		font-size: 0.75rem;
+		line-height: 1.55;
+	}
+
+	.token-hint {
+		margin: 0.65rem 0 0;
+		color: rgb(0 0 0 / 0.45);
+	}
+
+	.token-status {
+		min-height: 1.2rem;
+		margin: 0.35rem 0 0;
+		color: var(--primary);
+	}
+
+	.token-status[data-error="true"] {
+		color: oklch(0.58 0.19 25);
+	}
+
+	.room-toolbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1rem;
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--line-divider);
+		border-radius: 0.75rem;
+		background: var(--btn-regular-bg);
+	}
+
+	.room-toolbar p {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		margin: 0;
+		color: rgb(0 0 0 / 0.6);
+		font-size: 0.8rem;
+	}
+
+	.room-toolbar code {
+		padding: 0.15rem 0.45rem;
+		border-radius: 0.4rem;
+		background: var(--card-bg);
+		color: var(--primary);
+		font-family: "JetBrains Mono Variable", monospace;
+		font-weight: 700;
+	}
+
+	.room-toolbar button {
+		flex: none;
+		padding: 0.45rem 0.75rem;
+		background: transparent;
+		color: var(--primary);
+		font-size: 0.78rem;
+	}
+
+	#waline-chat {
+		--waline-theme-color: var(--primary);
+		--waline-active-color: var(--primary);
+		--waline-color: rgb(0 0 0 / 0.75);
+		--waline-bg-color: transparent;
+		--waline-bg-color-light: var(--btn-regular-bg);
+		--waline-bg-color-hover: var(--btn-regular-bg-hover);
+		--waline-border-color: var(--line-divider);
+		--waline-disable-bg-color: var(--btn-regular-bg);
+		--waline-disable-color: rgb(0 0 0 / 0.3);
+		--waline-code-bg-color: var(--codeblock-bg);
+		--waline-bq-color: var(--btn-regular-bg);
+		--waline-info-bg-color: var(--btn-regular-bg);
+		--waline-info-color: rgb(0 0 0 / 0.5);
+		min-height: 19rem;
+	}
+
+	:global(.dark) .token-copy h2,
+	:global(.dark) .token-field-row input {
+		color: rgb(255 255 255 / 0.9);
+	}
+
+	:global(.dark) .token-copy > p:last-child,
+	:global(.dark) .room-toolbar p {
+		color: rgb(255 255 255 / 0.55);
+	}
+
+	:global(.dark) .token-form label {
+		color: rgb(255 255 255 / 0.75);
+	}
+
+	:global(.dark) .token-hint {
+		color: rgb(255 255 255 / 0.45);
+	}
+
+	:global(.dark) #waline-chat {
+		--waline-color: rgb(255 255 255 / 0.75);
+		--waline-disable-color: rgb(255 255 255 / 0.3);
+		--waline-info-color: rgb(255 255 255 / 0.5);
+	}
+
+	#waline-chat:global(.waline-ready) {
+		min-height: 0;
+	}
+
+	#waline-chat :global(.wl-panel),
+	#waline-chat :global(.wl-card) {
+		border-color: var(--line-divider);
+	}
+
+	#waline-chat :global(.wl-btn) {
+		border-radius: 0.5rem;
+	}
+
+	#waline-chat :global(.wl-panel) {
+		overflow: visible;
+	}
+
+	#waline-chat :global(.wl-emoji-popup),
+	#waline-chat :global(.wl-gif-popup) {
+		max-width: calc(100vw - 3rem);
+	}
+
+	.waline-notice {
+		margin: 1rem 0 0;
+		color: rgb(0 0 0 / 0.5);
+	}
+
+	:global(.dark) .waline-notice {
+		color: rgb(255 255 255 / 0.5);
+	}
+
+	@media (max-width: 580px) {
+		.token-form {
+			padding: 1.25rem;
+		}
+
+		.token-field-row {
+			flex-direction: column;
+		}
+
+		.room-toolbar {
+			align-items: flex-start;
+		}
+
+		.room-toolbar p {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.25rem;
+		}
+	}
+</style>
+
+<script>
+	import { init, type WalineInstance } from "@waline/client";
+
+	type WalineRuntimeWindow = Window & {
+		__walineTokenChatRuntimeInstalled?: boolean;
+		__walineChatInstance?: WalineInstance | null;
+		__walineChatEpoch?: number;
+	};
+
+	const CHAT_NAMESPACE = "xianrui-waline-chat:v1:";
+	const ROOM_PATH_PREFIX = "/chat/rooms/";
+	const TOKEN_PATTERN = /^[0-9]+$/;
+
+	function destroyWalineChat(clearContainer = false): void {
+		const runtimeWindow = window as WalineRuntimeWindow;
+		runtimeWindow.__walineChatEpoch =
+			(runtimeWindow.__walineChatEpoch ?? 0) + 1;
+		const container = runtimeWindow.__walineChatInstance?.el;
+		runtimeWindow.__walineChatInstance?.destroy();
+		runtimeWindow.__walineChatInstance = null;
+		container?.classList.remove("waline-ready");
+		if (clearContainer) container?.replaceChildren();
+	}
+
+	async function hashRoomToken(token: string): Promise<string> {
+		if (!window.crypto?.subtle) {
+			throw new Error("当前浏览器环境无法安全计算 Token，请使用 HTTPS 访问。");
+		}
+
+		const bytes = new TextEncoder().encode(`${CHAT_NAMESPACE}${token}`);
+		const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+		return Array.from(new Uint8Array(digest), (byte) =>
+			byte.toString(16).padStart(2, "0"),
+		).join("");
+	}
+
+	function mountWalineChat(
+		container: HTMLElement,
+		serverURL: string,
+		roomPath: string,
+	): void {
+		const runtimeWindow = window as WalineRuntimeWindow;
+		destroyWalineChat(true);
+		let instance: WalineInstance | null = null;
+		try {
+			instance = init({
+				el: container,
+				serverURL,
+				path: roomPath,
+				lang: "zh-CN",
+				locale: {
+					placeholder: "欢迎来到这个 Token 房间，请友善交流～",
+					sofa: "这个房间还没有留言，来坐沙发吧！",
+				},
+				dark: "html.dark",
+				meta: ["nick", "mail"],
+				requiredMeta: ["nick"],
+				login: "enable",
+				commentSorting: "latest",
+				imageUploader: false,
+				pageview: false,
+				comment: false,
+				noRss: true,
+			});
+		} catch (error) {
+			container.replaceChildren();
+			throw error;
+		}
+
+		if (!instance) throw new Error("Waline 初始化失败，请稍后重试。");
+		runtimeWindow.__walineChatInstance = instance;
+		container.classList.add("waline-ready");
+	}
+
+	function setupWalineTokenGate(): void {
+		const shell = document.querySelector<HTMLElement>("#waline-chat-shell");
+		if (!shell) {
+			destroyWalineChat();
+			return;
+		}
+		shell.classList.remove("token-runtime-pending");
+		if (shell.dataset.runtimeReady === "true") return;
+		shell.dataset.runtimeReady = "true";
+		destroyWalineChat();
+
+		const gate = shell.querySelector<HTMLElement>("#waline-token-gate");
+		const room = shell.querySelector<HTMLElement>("#waline-room");
+		const form = shell.querySelector<HTMLFormElement>("#waline-token-form");
+		const input = shell.querySelector<HTMLInputElement>("#waline-room-token");
+		const submit = shell.querySelector<HTMLButtonElement>("#waline-token-submit");
+		const status = shell.querySelector<HTMLElement>("#waline-token-status");
+		const fingerprint = shell.querySelector<HTMLElement>(
+			"#waline-room-fingerprint",
+		);
+		const switchButton = shell.querySelector<HTMLButtonElement>(
+			"#waline-room-switch",
+		);
+		const container = shell.querySelector<HTMLElement>("#waline-chat");
+		const serverURL = shell.dataset.serverUrl?.trim();
+
+		if (
+			!gate ||
+			!room ||
+			!form ||
+			!input ||
+			!submit ||
+			!status ||
+			!fingerprint ||
+			!switchButton ||
+			!container ||
+			!serverURL
+		) {
+			return;
+		}
+
+		const setStatus = (message: string, isError = false): void => {
+			status.textContent = message;
+			status.dataset.error = String(isError);
+			input.setAttribute("aria-invalid", String(isError));
+		};
+
+		const showGate = (): void => {
+			destroyWalineChat(true);
+			room.hidden = true;
+			gate.hidden = false;
+			fingerprint.textContent = "";
+			form.reset();
+			setStatus("");
+			input.focus({ preventScroll: true });
+		};
+
+		let submitting = false;
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			if (submitting) return;
+			const token = input.value.trim();
+			if (!token) {
+				setStatus("请输入至少一位数字 Token。", true);
+				input.focus();
+				return;
+			}
+			if (!TOKEN_PATTERN.test(token)) {
+				setStatus("Token 只能包含数字 0–9。", true);
+				input.focus();
+				return;
+			}
+
+			submitting = true;
+			form.setAttribute("aria-busy", "true");
+			input.disabled = true;
+			submit.disabled = true;
+			setStatus("正在打开 Token 房间…");
+			const runtimeWindow = window as WalineRuntimeWindow;
+			const submitEpoch = runtimeWindow.__walineChatEpoch ?? 0;
+
+			try {
+				const digest = await hashRoomToken(token);
+				if (
+					!shell.isConnected ||
+					document.querySelector("#waline-chat-shell") !== shell ||
+					(runtimeWindow.__walineChatEpoch ?? 0) !== submitEpoch
+				) {
+					return;
+				}
+				input.value = "";
+				mountWalineChat(container, serverURL, `${ROOM_PATH_PREFIX}${digest}`);
+				fingerprint.textContent = digest.slice(0, 10).toUpperCase();
+				gate.hidden = true;
+				room.hidden = false;
+				setStatus("");
+				const mountedEpoch = runtimeWindow.__walineChatEpoch ?? 0;
+				requestAnimationFrame(() => {
+					if (
+						!shell.isConnected ||
+						document.querySelector("#waline-chat-shell") !== shell ||
+						(runtimeWindow.__walineChatEpoch ?? 0) !== mountedEpoch
+					) {
+						return;
+					}
+					container
+						.querySelector<HTMLTextAreaElement>(".wl-editor")
+						?.focus({ preventScroll: true });
+				});
+			} catch (error) {
+				destroyWalineChat(true);
+				container.replaceChildren();
+				room.hidden = true;
+				gate.hidden = false;
+				setStatus(
+					error instanceof Error ? error.message : "无法打开聊天室，请稍后重试。",
+					true,
+				);
+				input.focus({ preventScroll: true });
+				input.select();
+			} finally {
+				submitting = false;
+				form.removeAttribute("aria-busy");
+				input.disabled = false;
+				submit.disabled = false;
+			}
+		});
+
+		input.addEventListener("input", () => setStatus(""));
+		switchButton.addEventListener("click", showGate);
+	}
+
+	function installWalineTokenChatRuntime(): void {
+		const runtimeWindow = window as WalineRuntimeWindow;
+		if (runtimeWindow.__walineTokenChatRuntimeInstalled) {
+			setupWalineTokenGate();
+			return;
+		}
+
+		runtimeWindow.__walineTokenChatRuntimeInstalled = true;
+		setupWalineTokenGate();
+		const attachSwupHooks = () => {
+			window.swup?.hooks.on("content:replace", () => destroyWalineChat(), {
+				before: true,
+			});
+			window.swup?.hooks.on("page:view", () =>
+				requestAnimationFrame(setupWalineTokenGate),
+			);
+		};
+
+		if (window.swup?.hooks) attachSwupHooks();
+		else document.addEventListener("swup:enable", attachSwupHooks, { once: true });
+	}
+
+	installWalineTokenChatRuntime();
+</script>

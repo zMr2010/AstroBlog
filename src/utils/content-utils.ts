@@ -147,7 +147,7 @@ function shouldIncludePost(data: PostEntry["data"]) {
 
 // Retrieve renderable posts and sort them by publication date
 async function getRawSortedPosts() {
-	const allBlogPosts = await getCollection("posts", ({ data }) =>
+	const allBlogPosts = await getCollection("posts", ({ data }: PostEntry) =>
 		shouldIncludePost(data),
 	);
 	const renderableBlogPosts = applyBilingualRules(allBlogPosts);
@@ -258,7 +258,7 @@ export async function getBilingualPostPair(
 	if (!entry.data.biling) return null;
 
 	const info = getBilingualInfo(entry);
-	const allBlogPosts = await getCollection("posts", ({ data }) =>
+	const allBlogPosts = await getCollection("posts", ({ data }: PostEntry) =>
 		shouldIncludePost(data),
 	);
 	const groups = collectBilingualGroups(allBlogPosts);

@@ -1,0 +1,83 @@
+---
+import WalineChat from "@components/WalineChat.astro";
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+import { Icon } from "astro-icon/components";
+---
+
+<MainGridLayout
+	title="Chat"
+	description="Leave a message and chat with me."
+>
+	<section
+		class="chat-card card-base !overflow-visible z-10 px-6 py-6 md:px-9 relative w-full"
+	>
+		<header class="chat-header">
+			<div class="chat-icon" aria-hidden="true">
+				<Icon name="material-symbols:forum-outline-rounded" />
+			</div>
+			<div>
+				<h1>Chat</h1>
+				<p>输入房间 Token，进入属于你们的独立 Chat。</p>
+			</div>
+		</header>
+
+		<div class="chat-divider"></div>
+		<WalineChat />
+	</section>
+</MainGridLayout>
+
+<style>
+	:global(main:has(.chat-card)) {
+		overflow: visible;
+	}
+
+	.chat-card {
+		min-height: 30rem;
+	}
+
+	.chat-header {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.chat-icon {
+		display: grid;
+		width: 3rem;
+		height: 3rem;
+		flex: none;
+		place-items: center;
+		border-radius: 0.875rem;
+		background: var(--btn-regular-bg);
+		color: var(--primary);
+		font-size: 1.75rem;
+	}
+
+	h1 {
+		margin: 0;
+		color: rgb(0 0 0 / 0.9);
+		font-size: 1.75rem;
+		font-weight: 700;
+		line-height: 1.2;
+	}
+
+	:global(.dark) h1 {
+		color: rgb(255 255 255 / 0.9);
+	}
+
+	p {
+		margin: 0.35rem 0 0;
+		color: rgb(0 0 0 / 0.5);
+		line-height: 1.6;
+	}
+
+	:global(.dark) p {
+		color: rgb(255 255 255 / 0.5);
+	}
+
+	.chat-divider {
+		height: 1px;
+		margin: 1.5rem 0;
+		background: var(--line-divider);
+	}
+</style>

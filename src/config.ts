@@ -46,6 +46,10 @@ export const navBarConfig: NavBarConfig = {
 		LinkPreset.Faqs,
 		LinkPreset.About,
 		{
+			name: "Chat",
+			url: "/chat/",
+		},
+		{
 			name: "P.Z.",
 			url: "/private-zone/",
 		},
