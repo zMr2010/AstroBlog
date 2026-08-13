@@ -48,6 +48,7 @@ export const navBarConfig: NavBarConfig = {
 		{
 			name: "Chat",
 			url: "/chat/",
+			noSwup: true,
 		},
 		{
 			name: "P.Z.",
