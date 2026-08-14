@@ -1,28 +1,88 @@
 <script>
-	const PASSWORD_HASH = "0984e7d137408fbfe182f0f47e5b0a8a2328188243aff44a5dbaf3e42f6ba559";
-	const AUTH_STORAGE_KEY = "private-zone-authenticated-v3";
+	const AUTH_STORAGE_KEY = "private-zone-decryption-key-v4";
 	const LEGACY_AUTH_STORAGE_KEYS = [
+		"private-zone-authenticated-v3",
 		"private-zone-authenticated-v2",
 		"private-zone-auth-expires-at",
 	];
+	type GalleryItem = {
+		src: string;
+		date: string;
+		alt: string;
+		hoverCaption: string;
+		clickCaption: string;
+		ratio?: number;
+	};
+	type MusicTrack = { src: string; title: string; artist: string };
+	type PrivateZoneContent = {
+		intro: string;
+		gallery: GalleryItem[];
+		music: MusicTrack[];
+	};
+	type EncryptedPayload = {
+		version: number;
+		iterations: number;
+		salt: string;
+		iv: string;
+		ciphertext: string;
+	};
 	type RuntimeWindow = Window & { __privateZoneRuntimeInstalled?: boolean };
 
 	let galleryObserver: ResizeObserver | undefined;
 	let layoutFrame = 0;
 
-	function hasStoredAccess(): boolean {
+	function base64Bytes(value: string): ArrayBuffer {
+		return Uint8Array.from(atob(value), (character) => character.charCodeAt(0)).buffer as ArrayBuffer;
+	}
+
+	function hexBytes(value: string): ArrayBuffer {
+		if (!/^[a-f0-9]{64}$/i.test(value)) throw new Error("Invalid stored key");
+		return Uint8Array.from(value.match(/.{2}/g) ?? [], (byte) => Number.parseInt(byte, 16)).buffer as ArrayBuffer;
+	}
+
+	function bytesHex(value: ArrayBuffer): string {
+		return Array.from(new Uint8Array(value), (byte) => byte.toString(16).padStart(2, "0")).join("");
+	}
+
+	async function passwordMaterial(password: string): Promise<ArrayBuffer> {
+		return crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
+	}
+
+	async function decryptPayload(payload: EncryptedPayload, material: ArrayBuffer): Promise<PrivateZoneContent> {
+		if (payload.version !== 1) throw new Error("Unsupported encrypted payload");
+		const baseKey = await crypto.subtle.importKey("raw", material, "PBKDF2", false, ["deriveKey"]);
+		const key = await crypto.subtle.deriveKey(
+			{
+				name: "PBKDF2",
+				hash: "SHA-256",
+				salt: base64Bytes(payload.salt),
+				iterations: payload.iterations,
+			},
+			baseKey,
+			{ name: "AES-GCM", length: 256 },
+			false,
+			["decrypt"],
+		);
+		const plaintext = await crypto.subtle.decrypt(
+			{ name: "AES-GCM", iv: base64Bytes(payload.iv), tagLength: 128 },
+			key,
+			base64Bytes(payload.ciphertext),
+		);
+		return JSON.parse(new TextDecoder().decode(plaintext)) as PrivateZoneContent;
+	}
+
+	function storedMaterial(): ArrayBuffer | undefined {
 		try {
-			const storedHash = localStorage.getItem(AUTH_STORAGE_KEY);
-			if (storedHash !== PASSWORD_HASH) return false;
-			return true;
+			const value = localStorage.getItem(AUTH_STORAGE_KEY);
+			return value ? hexBytes(value) : undefined;
 		} catch {
-			return false;
+			return undefined;
 		}
 	}
 
-	function storeAccess(): void {
+	function storeMaterial(material: ArrayBuffer): void {
 		try {
-			localStorage.setItem(AUTH_STORAGE_KEY, PASSWORD_HASH);
+			localStorage.setItem(AUTH_STORAGE_KEY, bytesHex(material));
 			for (const key of LEGACY_AUTH_STORAGE_KEYS) {
 				localStorage.removeItem(key);
 				sessionStorage.removeItem(key);
@@ -32,98 +92,104 @@
 		}
 	}
 
-	function sha256Fallback(value: string): string {
-		const k = [
-			0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
-			0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-			0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-			0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-			0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
-			0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-			0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-			0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-			0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-			0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-			0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
-			0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-			0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
-			0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-			0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-			0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
-		];
-		const h = [
-			0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-			0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-		];
-		const rightRotate = (word: number, bits: number) =>
-			(word >>> bits) | (word << (32 - bits));
-		const bytes = Array.from(new TextEncoder().encode(value));
-		const bitLength = bytes.length * 8;
-		bytes.push(0x80);
-		while (bytes.length % 64 !== 56) bytes.push(0);
-		const highLength = Math.floor(bitLength / 2 ** 32);
-		const lowLength = bitLength >>> 0;
-		for (let shift = 24; shift >= 0; shift -= 8) bytes.push((highLength >>> shift) & 0xff);
-		for (let shift = 24; shift >= 0; shift -= 8) bytes.push((lowLength >>> shift) & 0xff);
-
-		for (let chunk = 0; chunk < bytes.length; chunk += 64) {
-			const w = new Array<number>(64);
-			for (let i = 0; i < 16; i += 1) {
-				const offset = chunk + i * 4;
-				w[i] = (
-					(bytes[offset] << 24)
-					| (bytes[offset + 1] << 16)
-					| (bytes[offset + 2] << 8)
-					| bytes[offset + 3]
-				) >>> 0;
-			}
-			for (let i = 16; i < 64; i += 1) {
-				const s0 = (rightRotate(w[i - 15], 7) ^ rightRotate(w[i - 15], 18) ^ (w[i - 15] >>> 3)) >>> 0;
-				const s1 = (rightRotate(w[i - 2], 17) ^ rightRotate(w[i - 2], 19) ^ (w[i - 2] >>> 10)) >>> 0;
-				w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
-			}
-
-			let [a, b, c, d, e, f, g, hash] = h;
-			for (let i = 0; i < 64; i += 1) {
-				const s1 = (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) >>> 0;
-				const ch = ((e & f) ^ (~e & g)) >>> 0;
-				const temp1 = (hash + s1 + ch + k[i] + w[i]) >>> 0;
-				const s0 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) >>> 0;
-				const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
-				const temp2 = (s0 + maj) >>> 0;
-				hash = g;
-				g = f;
-				f = e;
-				e = (d + temp1) >>> 0;
-				d = c;
-				c = b;
-				b = a;
-				a = (temp1 + temp2) >>> 0;
-			}
-			h[0] = (h[0] + a) >>> 0;
-			h[1] = (h[1] + b) >>> 0;
-			h[2] = (h[2] + c) >>> 0;
-			h[3] = (h[3] + d) >>> 0;
-			h[4] = (h[4] + e) >>> 0;
-			h[5] = (h[5] + f) >>> 0;
-			h[6] = (h[6] + g) >>> 0;
-			h[7] = (h[7] + hash) >>> 0;
+	function clearStoredMaterial(): void {
+		try {
+			localStorage.removeItem(AUTH_STORAGE_KEY);
+		} catch {
+			// Ignore unavailable storage.
 		}
-		return h.map((word) => word.toString(16).padStart(8, "0")).join("");
 	}
 
-	async function sha256(value: string): Promise<string> {
-		if (!globalThis.crypto?.subtle) return sha256Fallback(value);
-		const bytes = new TextEncoder().encode(value);
-		const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-		return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+	function element<K extends keyof HTMLElementTagNameMap>(
+		tag: K,
+		className?: string,
+	): HTMLElementTagNameMap[K] {
+		const node = document.createElement(tag);
+		if (className) node.className = className;
+		return node;
+	}
+
+	function renderPrivateContent(root: HTMLElement, data: PrivateZoneContent): void {
+		const content = root.querySelector<HTMLElement>("[data-pz-content]");
+		if (!content) throw new Error("Private Zone content container is missing");
+		content.replaceChildren();
+
+		const introCard = element("div", "card-base pz-intro-card");
+		const intro = element("p");
+		intro.textContent = data.intro;
+		introCard.append(intro);
+		content.append(introCard);
+
+		if (data.gallery.length > 0) {
+			const gallery = element("div", "pz-gallery");
+			gallery.dataset.pzGallery = "";
+			gallery.ariaLabel = "Private Zone 图片";
+			for (const item of data.gallery) {
+				const article = element("article", "pz-gallery-item");
+				if (item.ratio) article.dataset.ratio = String(item.ratio);
+				const button = element("button", "pz-image-button");
+				button.type = "button";
+				button.dataset.clickSrc = item.src;
+				button.dataset.clickCaption = item.clickCaption;
+				button.dataset.clickTitle = item.alt;
+				button.ariaLabel = `放大查看图片：${item.alt}`;
+				const image = element("img");
+				image.src = item.src;
+				image.alt = item.alt;
+				image.loading = "lazy";
+				image.decoding = "async";
+				button.append(image);
+				if (item.hoverCaption) {
+					const hover = element("span", "pz-hover-caption");
+					hover.textContent = item.hoverCaption;
+					button.append(hover);
+				}
+				if (item.date) {
+					const time = element("time");
+					time.dateTime = item.date;
+					time.textContent = item.date;
+					button.append(time);
+				}
+				article.append(button);
+				gallery.append(article);
+			}
+			content.append(gallery);
+		} else {
+			const empty = element("div", "pz-empty card-base");
+			const message = element("p");
+			message.textContent = "还没有照片。请在 Private Zone 内容配置中添加图片。";
+			empty.append(message);
+			content.append(empty);
+		}
+
+		const dialog = element("dialog", "pz-caption-dialog");
+		dialog.dataset.pzDialog = "";
+		dialog.setAttribute("aria-labelledby", "pz-caption-title");
+		const header = element("div", "pz-dialog-header");
+		const title = element("h2");
+		title.id = "pz-caption-title";
+		title.dataset.pzDialogTitle = "";
+		title.textContent = "照片文案";
+		const close = element("button");
+		close.type = "button";
+		close.dataset.pzDialogClose = "";
+		close.ariaLabel = "关闭文案弹窗";
+		close.textContent = "×";
+		header.append(title, close);
+		const figure = element("figure", "pz-dialog-figure");
+		const dialogImage = element("img");
+		dialogImage.dataset.pzDialogImage = "";
+		const caption = element("figcaption");
+		caption.dataset.pzDialogCaption = "";
+		figure.append(dialogImage, caption);
+		dialog.append(header, figure);
+		content.append(dialog);
 	}
 
 	function layoutGallery(gallery: HTMLElement): void {
 		const items = Array.from(gallery.querySelectorAll<HTMLElement>(".pz-gallery-item"));
 		gallery.replaceChildren(...items);
 		if (items.length === 0 || gallery.clientWidth < 1) return;
-
 		const gap = window.innerWidth < 640 ? 8 : 12;
 		const availableWidth = gallery.clientWidth;
 		const targetHeight = Math.min(230, Math.max(145, availableWidth * 0.24));
@@ -134,7 +200,6 @@
 				: Number(item.dataset.ratio) || 4 / 3;
 			return Math.min(8, Math.max(0.15, naturalRatio));
 		});
-
 		let start = 0;
 		while (start < items.length) {
 			let end = start;
@@ -146,13 +211,9 @@
 				idealHeight = (availableWidth - gap * (end - start - 1)) / ratioSum;
 				if (idealHeight <= targetHeight) break;
 			}
-
 			const isLastRow = end === items.length;
-			const rowHeight = isLastRow && idealHeight > targetHeight
-				? targetHeight
-				: Math.max(1, idealHeight);
-			const row = document.createElement("div");
-			row.className = "pz-gallery-row";
+			const rowHeight = isLastRow && idealHeight > targetHeight ? targetHeight : Math.max(1, idealHeight);
+			const row = element("div", "pz-gallery-row");
 			row.style.gap = `${gap}px`;
 			for (let index = start; index < end; index += 1) {
 				const item = items[index];
@@ -172,35 +233,25 @@
 
 	function setupGallery(gallery: HTMLElement): void {
 		for (const image of gallery.querySelectorAll<HTMLImageElement>("img")) {
-			if (image.dataset.layoutListener === "true") continue;
-			image.dataset.layoutListener = "true";
 			image.addEventListener("load", () => scheduleGalleryLayout(gallery));
 			image.addEventListener("error", () => scheduleGalleryLayout(gallery));
 		}
-
 		galleryObserver?.disconnect();
 		galleryObserver = new ResizeObserver(() => scheduleGalleryLayout(gallery));
 		galleryObserver.observe(gallery);
 		scheduleGalleryLayout(gallery);
 	}
 
-	function getPrivateZoneAssetUrls(root: HTMLElement): string[] {
+	async function cachePrivateZoneAssets(root: HTMLElement, tracks: MusicTrack[]): Promise<void> {
+		if (!("serviceWorker" in navigator)) return;
 		const sources = [
 			...Array.from(root.querySelectorAll<HTMLImageElement>("img"), (image) => image.src),
-			...Array.from(
-				document.querySelectorAll<HTMLElement>("[data-music-track]"),
-				(track) => track.dataset.src || "",
-			),
+			...tracks.map((track) => track.src),
 		];
-		return Array.from(new Set(sources))
+		const urls = Array.from(new Set(sources))
 			.map((source) => new URL(source, window.location.href))
 			.filter((assetUrl) => assetUrl.origin === window.location.origin)
 			.map((assetUrl) => assetUrl.href);
-	}
-
-	async function cachePrivateZoneAssets(root: HTMLElement): Promise<void> {
-		if (!("serviceWorker" in navigator)) return;
-		const urls = getPrivateZoneAssetUrls(root);
 		if (urls.length === 0) return;
 		try {
 			const base = import.meta.env.BASE_URL;
@@ -212,51 +263,32 @@
 		}
 	}
 
-	function unlock(root: HTMLElement): void {
-		root.dataset.unlocked = "true";
-		const gate = root.querySelector<HTMLElement>("[data-pz-gate]");
-		const content = root.querySelector<HTMLElement>("[data-pz-content]");
-		gate?.setAttribute("aria-hidden", "true");
-		content?.removeAttribute("inert");
-		content?.setAttribute("aria-hidden", "false");
-		document.body.classList.add("private-zone-unlocked");
-		const gallery = root.querySelector<HTMLElement>("[data-pz-gallery]");
-		if (gallery) requestAnimationFrame(() => setupGallery(gallery));
-		void cachePrivateZoneAssets(root);
-	}
-
 	function setupDialog(root: HTMLElement): void {
 		const dialog = root.querySelector<HTMLDialogElement>("[data-pz-dialog]");
 		const title = dialog?.querySelector<HTMLElement>("[data-pz-dialog-title]");
 		const dialogImage = dialog?.querySelector<HTMLImageElement>("[data-pz-dialog-image]");
 		const caption = dialog?.querySelector<HTMLElement>("[data-pz-dialog-caption]");
 		if (!dialog || !title || !dialogImage || !caption) return;
-
 		root.addEventListener("click", (event) => {
 			const target = event.target as HTMLElement;
 			const imageButton = target.closest<HTMLElement>("[data-click-src]");
 			if (imageButton) {
-				const imageSrc = imageButton.dataset.clickSrc || imageButton.querySelector<HTMLImageElement>("img")?.src || "";
+				const imageSrc = imageButton.dataset.clickSrc || "";
 				const imageTitle = imageButton.dataset.clickTitle || "Private Zone photo";
-				const clickCaption = imageButton.dataset.clickCaption || "";
 				if (!imageSrc) return;
 				title.textContent = imageTitle;
 				dialogImage.src = imageSrc;
 				dialogImage.alt = imageTitle;
-				caption.textContent = clickCaption;
-				caption.hidden = !clickCaption;
+				caption.textContent = imageButton.dataset.clickCaption || "";
+				caption.hidden = !caption.textContent;
 				dialog.showModal();
 			}
 			if (target.closest("[data-pz-dialog-close]")) dialog.close();
 		});
-
 		dialog.addEventListener("close", () => {
 			dialogImage.removeAttribute("src");
-			dialogImage.alt = "";
 			caption.textContent = "";
-			caption.hidden = true;
 		});
-
 		dialog.addEventListener("click", (event) => {
 			if (event.target !== dialog) return;
 			const rect = dialog.getBoundingClientRect();
@@ -264,6 +296,27 @@
 				&& event.clientY >= rect.top && event.clientY <= rect.bottom;
 			if (!inside) dialog.close();
 		});
+	}
+
+	function unlock(root: HTMLElement, data: PrivateZoneContent): void {
+		renderPrivateContent(root, data);
+		setupDialog(root);
+		root.dataset.unlocked = "true";
+		root.querySelector<HTMLElement>("[data-pz-gate]")?.setAttribute("aria-hidden", "true");
+		const content = root.querySelector<HTMLElement>("[data-pz-content]");
+		content?.removeAttribute("inert");
+		content?.setAttribute("aria-hidden", "false");
+		document.body.classList.add("private-zone-unlocked");
+		const gallery = root.querySelector<HTMLElement>("[data-pz-gallery]");
+		if (gallery) requestAnimationFrame(() => setupGallery(gallery));
+		document.dispatchEvent(new CustomEvent("private-zone:unlocked", { detail: { tracks: data.music } }));
+		void cachePrivateZoneAssets(root, data.music);
+	}
+
+	function readPayload(root: HTMLElement): EncryptedPayload {
+		const node = root.querySelector<HTMLScriptElement>("[data-pz-payload]");
+		if (!node?.textContent) throw new Error("Encrypted payload is missing");
+		return JSON.parse(node.textContent) as EncryptedPayload;
 	}
 
 	function initPrivateZone(): void {
@@ -276,16 +329,21 @@
 		if (root.dataset.runtimeReady === "true") return;
 		document.body.classList.remove("private-zone-unlocked");
 		root.dataset.runtimeReady = "true";
-		setupDialog(root);
-
 		const form = root.querySelector<HTMLFormElement>("[data-pz-password-form]");
 		const input = form?.querySelector<HTMLInputElement>("[data-pz-password]");
 		const status = form?.querySelector<HTMLElement>("[data-pz-password-status]");
-		if (hasStoredAccess()) {
-			unlock(root);
-			return;
+		const payload = readPayload(root);
+		const remembered = storedMaterial();
+		if (remembered) {
+			void decryptPayload(payload, remembered)
+				.then((data) => unlock(root, data))
+				.catch(() => {
+					clearStoredMaterial();
+					input?.focus({ preventScroll: true });
+				});
+		} else {
+			input?.focus({ preventScroll: true });
 		}
-		input?.focus({ preventScroll: true });
 		form?.addEventListener("submit", async (event) => {
 			event.preventDefault();
 			if (!input || !status) return;
@@ -293,17 +351,15 @@
 			if (submit) submit.disabled = true;
 			status.textContent = "Verifying…";
 			try {
-				if (await sha256(input.value) === PASSWORD_HASH) {
-					storeAccess();
-					status.textContent = "";
-					input.value = "";
-					unlock(root);
-				} else {
-					status.textContent = "Incorrect password. Please try again.";
-					input.select();
-				}
+				const material = await passwordMaterial(input.value);
+				const data = await decryptPayload(payload, material);
+				storeMaterial(material);
+				status.textContent = "";
+				input.value = "";
+				unlock(root, data);
 			} catch {
-				status.textContent = "Your browser could not verify the password. Please try a newer browser.";
+				status.textContent = "Incorrect password. Please try again.";
+				input.select();
 			} finally {
 				if (submit) submit.disabled = false;
 			}

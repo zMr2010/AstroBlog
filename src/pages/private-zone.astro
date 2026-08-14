@@ -3,7 +3,47 @@ import { Icon } from "astro-icon/components";
 import MainGridLayout from "../layouts/MainGridLayout.astro";
 import { privateZoneConfig } from "../utils/private-zone";
 
-const { intro, gallery } = privateZoneConfig;
+const legacyPasswordHash = "0984e7d137408fbfe182f0f47e5b0a8a2328188243aff44a5dbaf3e42f6ba559";
+const configuredPassword = process.env.PRIVATE_ZONE_PASSWORD;
+const configuredHash = process.env.PRIVATE_ZONE_PASSWORD_HASH?.trim().toLowerCase();
+const hexBytes = (value: string) =>
+	Uint8Array.from(value.match(/.{2}/g) ?? [], (byte) => Number.parseInt(byte, 16));
+const base64 = (value: ArrayBuffer) => {
+	const bytes = new Uint8Array(value);
+	let binary = "";
+	for (const byte of bytes) binary += String.fromCharCode(byte);
+	return btoa(binary);
+};
+const passwordHash = configuredPassword
+	? await crypto.subtle.digest("SHA-256", new TextEncoder().encode(configuredPassword))
+	: hexBytes(
+		configuredHash && /^[a-f0-9]{64}$/.test(configuredHash)
+			? configuredHash
+			: legacyPasswordHash,
+	).buffer as ArrayBuffer;
+const salt = crypto.getRandomValues(new Uint8Array(16));
+const iv = crypto.getRandomValues(new Uint8Array(12));
+const iterations = 310_000;
+const baseKey = await crypto.subtle.importKey("raw", passwordHash, "PBKDF2", false, ["deriveKey"]);
+const key = await crypto.subtle.deriveKey(
+	{ name: "PBKDF2", hash: "SHA-256", salt: salt.buffer as ArrayBuffer, iterations },
+	baseKey,
+	{ name: "AES-GCM", length: 256 },
+	false,
+	["encrypt"],
+);
+const encrypted = await crypto.subtle.encrypt(
+	{ name: "AES-GCM", iv: iv.buffer as ArrayBuffer, tagLength: 128 },
+	key,
+	new TextEncoder().encode(JSON.stringify(privateZoneConfig)),
+);
+const encryptedPayload = JSON.stringify({
+	version: 1,
+	iterations,
+	salt: base64(salt.buffer as ArrayBuffer),
+	iv: base64(iv.buffer as ArrayBuffer),
+	ciphertext: base64(encrypted),
+});
 ---
 
 <MainGridLayout title="Private Zone" description="Private Zone" lang="en">
@@ -39,59 +79,12 @@ const { intro, gallery } = privateZoneConfig;
 			</form>
 		</div>
 
-		<div class="pz-content" data-pz-content aria-hidden="true" inert lang="zh-CN">
-			<div class="card-base pz-intro-card">
-				<p>{intro}</p>
-			</div>
-
-			{gallery.length > 0 ? (
-				<div class="pz-gallery" data-pz-gallery aria-label="Private Zone 图片">
-					{gallery.map((item) => (
-						<article
-							class="pz-gallery-item"
-							data-ratio={item.ratio}
-						>
-							<button
-								type="button"
-								class="pz-image-button"
-								data-click-src={item.src}
-								data-click-caption={item.clickCaption}
-								data-click-title={item.alt}
-								aria-label={`放大查看图片：${item.alt}`}
-							>
-								<img src={item.src} alt={item.alt} loading="lazy" decoding="async" />
-								{item.hoverCaption && (
-									<span class="pz-hover-caption">{item.hoverCaption}</span>
-								)}
-								{item.date && <time datetime={item.date}>{item.date}</time>}
-							</button>
-						</article>
-					))}
-				</div>
-			) : (
-				<div class="pz-empty card-base">
-					<Icon name="material-symbols:add-photo-alternate-outline-rounded" class="text-[2rem]"></Icon>
-					<p>还没有照片。将图片放入 <code>public/private-zone/images</code>，然后编辑 <code>src/content/private-zone.yml</code> 即可。</p>
-				</div>
-			)}
-
-			<dialog class="pz-caption-dialog" data-pz-dialog aria-labelledby="pz-caption-title">
-				<div class="pz-dialog-header">
-					<h2 id="pz-caption-title" data-pz-dialog-title>照片文案</h2>
-					<button type="button" data-pz-dialog-close aria-label="关闭文案弹窗">
-						<Icon name="material-symbols:close-rounded" class="text-[1.5rem]"></Icon>
-					</button>
-				</div>
-				<figure class="pz-dialog-figure">
-					<img data-pz-dialog-image alt="" />
-					<figcaption data-pz-dialog-caption></figcaption>
-				</figure>
-			</dialog>
-		</div>
+		<div class="pz-content" data-pz-content aria-hidden="true" inert lang="zh-CN"></div>
+		<script is:inline type="application/octet-stream" data-pz-payload set:html={encryptedPayload}></script>
 	</section>
 </MainGridLayout>
 
-<style>
+<style is:global>
 	.pz-shell {
 		width: 100%;
 		min-height: 24rem;

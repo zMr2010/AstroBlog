@@ -1,17 +1,11 @@
 ---
 import { Icon } from "astro-icon/components";
-import { privateZoneConfig } from "../../utils/private-zone";
-
-const tracks = privateZoneConfig.music;
-const hasTracks = tracks.length > 0;
-const firstTrack = tracks[0];
 ---
 
-<div class="pz-music-player" data-music-player data-has-tracks={String(hasTracks)}>
+<div class="pz-music-player" data-music-player data-has-tracks="false">
 	<audio
 		data-music-audio
 		preload="metadata"
-		src={firstTrack?.src}
 	></audio>
 
 	<div class="pz-music-card card-base p-4" data-player-surface data-playing="false">
@@ -21,21 +15,21 @@ const firstTrack = tracks[0];
 			</div>
 			<div class="min-w-0">
 				<div class="text-75 text-sm font-bold">私人电台</div>
-				<div class="pz-track-line text-50 text-xs" title={firstTrack?.title}>
-					<span data-track-title>{firstTrack?.title ?? "暂未配置背景音乐"}</span>
-					<span data-track-artist>{firstTrack?.artist ? ` · ${firstTrack.artist}` : ""}</span>
+				<div class="pz-track-line text-50 text-xs">
+					<span data-track-title>解锁后加载</span>
+					<span data-track-artist></span>
 				</div>
 			</div>
 		</div>
 		<div class="flex items-center justify-center gap-2">
-			<button class="pz-control" type="button" data-music-action="previous" aria-label="上一首" disabled={!hasTracks}>
+			<button class="pz-control" type="button" data-music-action="previous" aria-label="上一首" disabled>
 				<Icon name="material-symbols:skip-previous-rounded" class="text-[1.4rem]"></Icon>
 			</button>
-			<button class="pz-control pz-play-control" type="button" data-music-action="toggle" aria-label="播放背景音乐" disabled={!hasTracks}>
+			<button class="pz-control pz-play-control" type="button" data-music-action="toggle" aria-label="播放背景音乐" disabled>
 				<Icon name="material-symbols:play-arrow-rounded" class="pz-play-icon text-[1.55rem]"></Icon>
 				<Icon name="material-symbols:pause-rounded" class="pz-pause-icon text-[1.55rem]"></Icon>
 			</button>
-			<button class="pz-control" type="button" data-music-action="next" aria-label="下一首" disabled={!hasTracks}>
+			<button class="pz-control" type="button" data-music-action="next" aria-label="下一首" disabled>
 				<Icon name="material-symbols:skip-next-rounded" class="text-[1.4rem]"></Icon>
 			</button>
 		</div>
@@ -43,15 +37,15 @@ const firstTrack = tracks[0];
 
 	<div class="pz-music-float" data-music-float data-player-surface data-playing="false" data-open="false">
 		<div class="pz-float-panel" aria-label="背景音乐控制">
-			<div class="pz-float-title" data-track-title>{firstTrack?.title ?? "暂无音乐"}</div>
-			<button class="pz-float-control" type="button" data-music-action="previous" aria-label="上一首" disabled={!hasTracks}>
+			<div class="pz-float-title" data-track-title>解锁后加载</div>
+			<button class="pz-float-control" type="button" data-music-action="previous" aria-label="上一首" disabled>
 				<Icon name="material-symbols:skip-previous-rounded" class="text-[1.25rem]"></Icon>
 			</button>
-			<button class="pz-float-control" type="button" data-music-action="toggle" aria-label="播放背景音乐" disabled={!hasTracks}>
+			<button class="pz-float-control" type="button" data-music-action="toggle" aria-label="播放背景音乐" disabled>
 				<Icon name="material-symbols:play-arrow-rounded" class="pz-play-icon text-[1.35rem]"></Icon>
 				<Icon name="material-symbols:pause-rounded" class="pz-pause-icon text-[1.35rem]"></Icon>
 			</button>
-			<button class="pz-float-control" type="button" data-music-action="next" aria-label="下一首" disabled={!hasTracks}>
+			<button class="pz-float-control" type="button" data-music-action="next" aria-label="下一首" disabled>
 				<Icon name="material-symbols:skip-next-rounded" class="text-[1.25rem]"></Icon>
 			</button>
 		</div>
@@ -61,17 +55,12 @@ const firstTrack = tracks[0];
 			data-music-action="menu"
 			aria-label="展开背景音乐控制"
 			aria-expanded="false"
-			disabled={!hasTracks}
+			disabled
 		>
 			<Icon name="material-symbols:music-note-rounded" class="text-[1.55rem]"></Icon>
 		</button>
 	</div>
 
-	<div class="hidden" aria-hidden="true">
-		{tracks.map((track) => (
-			<span data-music-track data-src={track.src} data-title={track.title} data-artist={track.artist}></span>
-		))}
-	</div>
 </div>
 
 <style>
@@ -254,6 +243,7 @@ const firstTrack = tracks[0];
 
 <script>
 	type Track = { src: string; title: string; artist: string };
+	type PrivateZoneUnlockEvent = CustomEvent<{ tracks: Track[] }>;
 
 	function initMusicPlayer() {
 		const root = document.querySelector<HTMLElement>("[data-music-player]");
@@ -262,14 +252,9 @@ const firstTrack = tracks[0];
 
 		const audio = root.querySelector<HTMLAudioElement>("[data-music-audio]");
 		const floating = root.querySelector<HTMLElement>("[data-music-float]");
-		const trackNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-music-track]"));
 		const titleNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-track-title]"));
 		const artistNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-track-artist]"));
-		const tracks: Track[] = trackNodes.map((node) => ({
-			src: node.dataset.src ?? "",
-			title: node.dataset.title ?? "Untitled",
-			artist: node.dataset.artist ?? "",
-		}));
+		const tracks: Track[] = [];
 		if (!audio || !floating) return;
 
 		let currentIndex = 0;
@@ -315,7 +300,23 @@ const firstTrack = tracks[0];
 			if (shouldPlay) void play();
 		};
 
-		if (tracks.length > 0) setTrack(currentIndex);
+		const loadTracks = (nextTracks: Track[]) => {
+			tracks.splice(0, tracks.length, ...nextTracks.filter((track) => track.src));
+			root.dataset.hasTracks = String(tracks.length > 0);
+			for (const button of root.querySelectorAll<HTMLButtonElement>("[data-music-action]")) {
+				button.disabled = tracks.length === 0;
+			}
+			if (tracks.length > 0) setTrack(Math.min(currentIndex, tracks.length - 1));
+			else {
+				for (const node of titleNodes) node.textContent = "暂未配置背景音乐";
+			}
+		};
+
+		document.addEventListener(
+			"private-zone:unlocked",
+			(event) => loadTracks((event as PrivateZoneUnlockEvent).detail.tracks),
+			{ once: true },
+		);
 
 		for (const button of root.querySelectorAll<HTMLButtonElement>("[data-music-action]")) {
 			button.addEventListener("click", () => {
