@@ -17,6 +17,15 @@ pnpm-debug.log*
 .env
 .env.production
 
+# Private Zone plaintext sources stay local; only generated ciphertext is committed.
+/private-zone-source/private-zone.yml
+/private-zone-source/images/*
+!/private-zone-source/images/README.md
+/private-zone-source/music/*
+!/private-zone-source/music/README.md
+/private-zone-source/.manifest-*.json
+/public/private-zone/.encrypted-build-*/
+
 # macOS-specific files
 .DS_Store
 

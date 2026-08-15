@@ -242,8 +242,18 @@ import { Icon } from "astro-icon/components";
 </style>
 
 <script>
-	type Track = { src: string; title: string; artist: string };
-	type PrivateZoneUnlockEvent = CustomEvent<{ tracks: Track[] }>;
+	type EncryptedAsset = {
+		encryptedSrc: string;
+		iv: string;
+		aad: string;
+		mime: string;
+		size: number;
+	};
+	type Track = { asset: EncryptedAsset; title: string; artist: string };
+	type PrivateZoneUnlockEvent = CustomEvent<{
+		tracks: Track[];
+		resolveAsset: (asset: EncryptedAsset) => Promise<string>;
+	}>;
 
 	function initMusicPlayer() {
 		const root = document.querySelector<HTMLElement>("[data-music-player]");
@@ -258,9 +268,11 @@ import { Icon } from "astro-icon/components";
 		if (!audio || !floating) return;
 
 		let currentIndex = 0;
+		let requestedTrack = 0;
+		let resolveAsset: ((asset: EncryptedAsset) => Promise<string>) | undefined;
 		try {
 			const storedIndex = Number(localStorage.getItem("private-zone-music-index"));
-			if (Number.isInteger(storedIndex) && storedIndex >= 0 && storedIndex < tracks.length) {
+			if (Number.isInteger(storedIndex) && storedIndex >= 0) {
 				currentIndex = storedIndex;
 			}
 		} catch {
@@ -276,7 +288,11 @@ import { Icon } from "astro-icon/components";
 		};
 
 		const play = async () => {
-			if (tracks.length === 0) return;
+			if (tracks.length === 0 || !resolveAsset) return;
+			if (!audio.src) {
+				await setTrack(currentIndex, true);
+				return;
+			}
 			try {
 				await audio.play();
 			} catch {
@@ -284,11 +300,24 @@ import { Icon } from "astro-icon/components";
 			}
 		};
 
-		const setTrack = (index: number, shouldPlay = false) => {
-			if (tracks.length === 0) return;
+		const setTrack = async (index: number, shouldPlay = false) => {
+			if (tracks.length === 0 || !resolveAsset) return;
 			currentIndex = (index + tracks.length) % tracks.length;
 			const track = tracks[currentIndex];
-			audio.src = track.src;
+			const requestId = ++requestedTrack;
+			for (const node of titleNodes) node.textContent = `${track.title}（解密中…）`;
+			let objectUrl: string;
+			try {
+				objectUrl = await resolveAsset(track.asset);
+			} catch (error) {
+				if (requestId === requestedTrack) {
+					for (const node of titleNodes) node.textContent = `${track.title}（解密失败）`;
+				}
+				console.error("Unable to decrypt a Private Zone audio track.", error);
+				return;
+			}
+			if (requestId !== requestedTrack) return;
+			audio.src = objectUrl;
 			audio.load();
 			for (const node of titleNodes) node.textContent = track.title;
 			for (const node of artistNodes) node.textContent = track.artist ? ` · ${track.artist}` : "";
@@ -297,26 +326,30 @@ import { Icon } from "astro-icon/components";
 			} catch {
 				// Ignore unavailable storage.
 			}
-			if (shouldPlay) void play();
+			if (shouldPlay) await play();
 		};
 
-		const loadTracks = (nextTracks: Track[]) => {
-			tracks.splice(0, tracks.length, ...nextTracks.filter((track) => track.src));
+		const loadTracks = (
+			nextTracks: Track[],
+			nextResolver: (asset: EncryptedAsset) => Promise<string>,
+		) => {
+			resolveAsset = nextResolver;
+			tracks.splice(0, tracks.length, ...nextTracks.filter((track) => track.asset.encryptedSrc));
 			root.dataset.hasTracks = String(tracks.length > 0);
 			for (const button of root.querySelectorAll<HTMLButtonElement>("[data-music-action]")) {
 				button.disabled = tracks.length === 0;
 			}
-			if (tracks.length > 0) setTrack(Math.min(currentIndex, tracks.length - 1));
+			if (tracks.length > 0) void setTrack(Math.min(currentIndex, tracks.length - 1));
 			else {
 				for (const node of titleNodes) node.textContent = "暂未配置背景音乐";
 			}
 		};
 
-		document.addEventListener(
-			"private-zone:unlocked",
-			(event) => loadTracks((event as PrivateZoneUnlockEvent).detail.tracks),
-			{ once: true },
-		);
+		const handleUnlock = (event: Event) => {
+			const { tracks: unlockedTracks, resolveAsset: unlockedResolver } = (event as PrivateZoneUnlockEvent).detail;
+			loadTracks(unlockedTracks, unlockedResolver);
+		};
+		document.addEventListener("private-zone:unlocked", handleUnlock, { once: true });
 
 		for (const button of root.querySelectorAll<HTMLButtonElement>("[data-music-action]")) {
 			button.addEventListener("click", () => {
@@ -333,21 +366,22 @@ import { Icon } from "astro-icon/components";
 					return;
 				}
 				const wasPlaying = !audio.paused;
-				if (action === "previous") setTrack(currentIndex - 1, wasPlaying);
-				if (action === "next") setTrack(currentIndex + 1, wasPlaying);
+				if (action === "previous") void setTrack(currentIndex - 1, wasPlaying);
+				if (action === "next") void setTrack(currentIndex + 1, wasPlaying);
 			});
 		}
 
 		audio.addEventListener("play", () => setPlayingState(true));
 		audio.addEventListener("pause", () => setPlayingState(false));
-		audio.addEventListener("ended", () => setTrack(currentIndex + 1, true));
+		audio.addEventListener("ended", () => void setTrack(currentIndex + 1, true));
 
-		document.addEventListener("click", (event) => {
+		const handleDocumentClick = (event: MouseEvent) => {
 			if (floating.dataset.open !== "true" || floating.contains(event.target as Node)) return;
 			floating.dataset.open = "false";
 			const menuButton = floating.querySelector<HTMLButtonElement>("[data-music-action='menu']");
 			if (menuButton) menuButton.ariaExpanded = "false";
-		});
+		};
+		document.addEventListener("click", handleDocumentClick);
 
 		const media = window.matchMedia("(max-width: 1023px)");
 		const placeFloatingPlayer = () => {
@@ -356,14 +390,22 @@ import { Icon } from "astro-icon/components";
 		};
 		placeFloatingPlayer();
 		media.addEventListener("change", placeFloatingPlayer);
+		const cleanup = () => {
+			audio.pause();
+			audio.removeAttribute("src");
+			audio.load();
+			requestedTrack += 1;
+			tracks.splice(0, tracks.length);
+			resolveAsset = undefined;
+			document.removeEventListener("private-zone:unlocked", handleUnlock);
+			document.removeEventListener("click", handleDocumentClick);
+			media.removeEventListener("change", placeFloatingPlayer);
+			if (floating.parentElement !== root) root.append(floating);
+		};
 		const attachSwupHook = () => {
 			window.swup?.hooks.on(
 				"content:replace",
-				() => {
-					// On narrow screens the floating controls live under <body>.
-					// Return them before Swup removes #sidebar so no player survives P.Z.
-					if (floating.parentElement !== root) root.append(floating);
-				},
+				cleanup,
 				{ before: true },
 			);
 		};

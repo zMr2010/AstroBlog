@@ -1,19 +1,26 @@
 <script>
-	const AUTH_STORAGE_KEY = "private-zone-decryption-key-v4";
 	const LEGACY_AUTH_STORAGE_KEYS = [
+		"private-zone-decryption-key-v4",
 		"private-zone-authenticated-v3",
 		"private-zone-authenticated-v2",
 		"private-zone-auth-expires-at",
 	];
+	type EncryptedAsset = {
+		encryptedSrc: string;
+		iv: string;
+		aad: string;
+		mime: string;
+		size: number;
+	};
 	type GalleryItem = {
-		src: string;
+		asset: EncryptedAsset;
 		date: string;
 		alt: string;
 		hoverCaption: string;
 		clickCaption: string;
 		ratio?: number;
 	};
-	type MusicTrack = { src: string; title: string; artist: string };
+	type MusicTrack = { asset: EncryptedAsset; title: string; artist: string };
 	type PrivateZoneContent = {
 		intro: string;
 		gallery: GalleryItem[];
@@ -24,34 +31,31 @@
 		iterations: number;
 		salt: string;
 		iv: string;
+		aad: string;
 		ciphertext: string;
 	};
 	type RuntimeWindow = Window & { __privateZoneRuntimeInstalled?: boolean };
 
 	let galleryObserver: ResizeObserver | undefined;
+	let protectedImageObserver: IntersectionObserver | undefined;
 	let layoutFrame = 0;
+	const imageAssets = new WeakMap<HTMLImageElement, EncryptedAsset>();
+	const decryptedAssetUrls = new Map<string, string>();
+	const pendingAssetUrls = new Map<string, Promise<string>>();
+	let assetGeneration = 0;
 
 	function base64Bytes(value: string): ArrayBuffer {
 		return Uint8Array.from(atob(value), (character) => character.charCodeAt(0)).buffer as ArrayBuffer;
-	}
-
-	function hexBytes(value: string): ArrayBuffer {
-		if (!/^[a-f0-9]{64}$/i.test(value)) throw new Error("Invalid stored key");
-		return Uint8Array.from(value.match(/.{2}/g) ?? [], (byte) => Number.parseInt(byte, 16)).buffer as ArrayBuffer;
-	}
-
-	function bytesHex(value: ArrayBuffer): string {
-		return Array.from(new Uint8Array(value), (byte) => byte.toString(16).padStart(2, "0")).join("");
 	}
 
 	async function passwordMaterial(password: string): Promise<ArrayBuffer> {
 		return crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
 	}
 
-	async function decryptPayload(payload: EncryptedPayload, material: ArrayBuffer): Promise<PrivateZoneContent> {
+	async function deriveDecryptionKey(payload: EncryptedPayload, material: ArrayBuffer): Promise<CryptoKey> {
 		if (payload.version !== 1) throw new Error("Unsupported encrypted payload");
 		const baseKey = await crypto.subtle.importKey("raw", material, "PBKDF2", false, ["deriveKey"]);
-		const key = await crypto.subtle.deriveKey(
+		return crypto.subtle.deriveKey(
 			{
 				name: "PBKDF2",
 				hash: "SHA-256",
@@ -63,38 +67,93 @@
 			false,
 			["decrypt"],
 		);
+	}
+
+	async function decryptPayload(payload: EncryptedPayload, key: CryptoKey): Promise<PrivateZoneContent> {
 		const plaintext = await crypto.subtle.decrypt(
-			{ name: "AES-GCM", iv: base64Bytes(payload.iv), tagLength: 128 },
+			{
+				name: "AES-GCM",
+				iv: base64Bytes(payload.iv),
+				additionalData: base64Bytes(payload.aad),
+				tagLength: 128,
+			},
 			key,
 			base64Bytes(payload.ciphertext),
 		);
 		return JSON.parse(new TextDecoder().decode(plaintext)) as PrivateZoneContent;
 	}
 
-	function storedMaterial(): ArrayBuffer | undefined {
+	function assetCacheKey(asset: EncryptedAsset): string {
+		return `${asset.encryptedSrc}\u0000${asset.iv}`;
+	}
+
+	async function decryptAsset(asset: EncryptedAsset, key: CryptoKey): Promise<string> {
+		const cacheKey = assetCacheKey(asset);
+		const cached = decryptedAssetUrls.get(cacheKey);
+		if (cached) return cached;
+		const pending = pendingAssetUrls.get(cacheKey);
+		if (pending) return pending;
+
+		const decryption = (async () => {
+			const generation = assetGeneration;
+			const assetUrl = new URL(asset.encryptedSrc, window.location.href);
+			if (
+				assetUrl.origin !== window.location.origin
+				|| !assetUrl.pathname.includes("/private-zone/encrypted/")
+				|| !assetUrl.pathname.endsWith(".pze")
+			) {
+				throw new Error("Refusing to load an invalid Private Zone asset URL");
+			}
+			const response = await fetch(assetUrl, { credentials: "same-origin", cache: "force-cache" });
+			if (!response.ok) throw new Error(`Encrypted asset request failed: ${response.status}`);
+			const ciphertext = await response.arrayBuffer();
+			if (ciphertext.byteLength !== asset.size + 16) {
+				throw new Error("Encrypted asset size does not match its authenticated manifest");
+			}
+			const plaintext = await crypto.subtle.decrypt(
+				{
+					name: "AES-GCM",
+					iv: base64Bytes(asset.iv),
+					additionalData: base64Bytes(asset.aad),
+					tagLength: 128,
+				},
+				key,
+				ciphertext,
+			);
+			if (generation !== assetGeneration) {
+				throw new Error("Private Zone asset decryption was cancelled");
+			}
+			const objectUrl = URL.createObjectURL(new Blob([plaintext], { type: asset.mime }));
+			if (generation !== assetGeneration) {
+				URL.revokeObjectURL(objectUrl);
+				throw new Error("Private Zone asset decryption was cancelled");
+			}
+			decryptedAssetUrls.set(cacheKey, objectUrl);
+			return objectUrl;
+		})();
+		pendingAssetUrls.set(cacheKey, decryption);
 		try {
-			const value = localStorage.getItem(AUTH_STORAGE_KEY);
-			return value ? hexBytes(value) : undefined;
-		} catch {
-			return undefined;
+			return await decryption;
+		} finally {
+			pendingAssetUrls.delete(cacheKey);
 		}
 	}
 
-	function storeMaterial(material: ArrayBuffer): void {
+	function clearDecryptedAssets(): void {
+		assetGeneration += 1;
+		protectedImageObserver?.disconnect();
+		protectedImageObserver = undefined;
+		for (const objectUrl of decryptedAssetUrls.values()) URL.revokeObjectURL(objectUrl);
+		decryptedAssetUrls.clear();
+		pendingAssetUrls.clear();
+	}
+
+	function clearLegacyAccess(): void {
 		try {
-			localStorage.setItem(AUTH_STORAGE_KEY, bytesHex(material));
 			for (const key of LEGACY_AUTH_STORAGE_KEYS) {
 				localStorage.removeItem(key);
 				sessionStorage.removeItem(key);
 			}
-		} catch {
-			// The current page still unlocks if persistent storage is unavailable.
-		}
-	}
-
-	function clearStoredMaterial(): void {
-		try {
-			localStorage.removeItem(AUTH_STORAGE_KEY);
 		} catch {
 			// Ignore unavailable storage.
 		}
@@ -129,15 +188,13 @@
 				if (item.ratio) article.dataset.ratio = String(item.ratio);
 				const button = element("button", "pz-image-button");
 				button.type = "button";
-				button.dataset.clickSrc = item.src;
 				button.dataset.clickCaption = item.clickCaption;
 				button.dataset.clickTitle = item.alt;
 				button.ariaLabel = `放大查看图片：${item.alt}`;
 				const image = element("img");
-				image.src = item.src;
 				image.alt = item.alt;
-				image.loading = "lazy";
 				image.decoding = "async";
+				imageAssets.set(image, item.asset);
 				button.append(image);
 				if (item.hoverCaption) {
 					const hover = element("span", "pz-hover-caption");
@@ -242,28 +299,48 @@
 		scheduleGalleryLayout(gallery);
 	}
 
-	async function cachePrivateZoneAssets(root: HTMLElement, tracks: MusicTrack[]): Promise<void> {
-		if (!("serviceWorker" in navigator)) return;
-		const sources = [
-			...Array.from(root.querySelectorAll<HTMLImageElement>("img"), (image) => image.src),
-			...tracks.map((track) => track.src),
-		];
-		const urls = Array.from(new Set(sources))
-			.map((source) => new URL(source, window.location.href))
-			.filter((assetUrl) => assetUrl.origin === window.location.origin)
-			.map((assetUrl) => assetUrl.href);
-		if (urls.length === 0) return;
-		try {
-			const base = import.meta.env.BASE_URL;
-			await navigator.serviceWorker.register(`${base}private-zone-sw.js`, { scope: base });
-			const registration = await navigator.serviceWorker.ready;
-			registration.active?.postMessage({ type: "CACHE_PRIVATE_ZONE_ASSETS", urls });
-		} catch (error) {
-			console.warn("Private Zone media caching is unavailable.", error);
+	function setupProtectedImages(gallery: HTMLElement, key: CryptoKey): void {
+		protectedImageObserver?.disconnect();
+		protectedImageObserver = new IntersectionObserver(
+			(entries, observer) => {
+				for (const entry of entries) {
+					if (!entry.isIntersecting) continue;
+					const image = entry.target as HTMLImageElement;
+					observer.unobserve(image);
+					const asset = imageAssets.get(image);
+					if (!asset) continue;
+					void decryptAsset(asset, key)
+						.then((objectUrl) => {
+							image.src = objectUrl;
+						})
+						.catch((error) => {
+							console.error("Unable to decrypt a Private Zone image.", error);
+							image.alt = `${image.alt}（加载失败）`;
+						});
+				}
+			},
+			{ rootMargin: "800px 0px" },
+		);
+		for (const image of gallery.querySelectorAll<HTMLImageElement>("img")) {
+			protectedImageObserver.observe(image);
 		}
 	}
 
-	function setupDialog(root: HTMLElement): void {
+	async function retireLegacyPrivateZoneWorker(): Promise<void> {
+		if (!("serviceWorker" in navigator)) return;
+		try {
+			const base = import.meta.env.BASE_URL;
+			const registration = await navigator.serviceWorker.register(`${base}private-zone-sw.js`, {
+				scope: base,
+				updateViaCache: "none",
+			});
+			await registration.update();
+		} catch (error) {
+			console.warn("Unable to retire the legacy Private Zone media cache.", error);
+		}
+	}
+
+	function setupDialog(root: HTMLElement, key: CryptoKey): void {
 		const dialog = root.querySelector<HTMLDialogElement>("[data-pz-dialog]");
 		const title = dialog?.querySelector<HTMLElement>("[data-pz-dialog-title]");
 		const dialogImage = dialog?.querySelector<HTMLImageElement>("[data-pz-dialog-image]");
@@ -271,17 +348,22 @@
 		if (!dialog || !title || !dialogImage || !caption) return;
 		root.addEventListener("click", (event) => {
 			const target = event.target as HTMLElement;
-			const imageButton = target.closest<HTMLElement>("[data-click-src]");
+			const imageButton = target.closest<HTMLElement>(".pz-image-button");
 			if (imageButton) {
-				const imageSrc = imageButton.dataset.clickSrc || "";
+				const sourceImage = imageButton.querySelector<HTMLImageElement>("img");
+				const asset = sourceImage ? imageAssets.get(sourceImage) : undefined;
 				const imageTitle = imageButton.dataset.clickTitle || "Private Zone photo";
-				if (!imageSrc) return;
-				title.textContent = imageTitle;
-				dialogImage.src = imageSrc;
-				dialogImage.alt = imageTitle;
-				caption.textContent = imageButton.dataset.clickCaption || "";
-				caption.hidden = !caption.textContent;
-				dialog.showModal();
+				if (!asset) return;
+				void decryptAsset(asset, key)
+					.then((imageSrc) => {
+						title.textContent = imageTitle;
+						dialogImage.src = imageSrc;
+						dialogImage.alt = imageTitle;
+						caption.textContent = imageButton.dataset.clickCaption || "";
+						caption.hidden = !caption.textContent;
+						dialog.showModal();
+					})
+					.catch((error) => console.error("Unable to decrypt the selected image.", error));
 			}
 			if (target.closest("[data-pz-dialog-close]")) dialog.close();
 		});
@@ -298,9 +380,9 @@
 		});
 	}
 
-	function unlock(root: HTMLElement, data: PrivateZoneContent): void {
+	function unlock(root: HTMLElement, data: PrivateZoneContent, key: CryptoKey): void {
 		renderPrivateContent(root, data);
-		setupDialog(root);
+		setupDialog(root, key);
 		root.dataset.unlocked = "true";
 		root.querySelector<HTMLElement>("[data-pz-gate]")?.setAttribute("aria-hidden", "true");
 		const content = root.querySelector<HTMLElement>("[data-pz-content]");
@@ -308,9 +390,18 @@
 		content?.setAttribute("aria-hidden", "false");
 		document.body.classList.add("private-zone-unlocked");
 		const gallery = root.querySelector<HTMLElement>("[data-pz-gallery]");
-		if (gallery) requestAnimationFrame(() => setupGallery(gallery));
-		document.dispatchEvent(new CustomEvent("private-zone:unlocked", { detail: { tracks: data.music } }));
-		void cachePrivateZoneAssets(root, data.music);
+		if (gallery) {
+			requestAnimationFrame(() => {
+				setupGallery(gallery);
+				setupProtectedImages(gallery, key);
+			});
+		}
+		document.dispatchEvent(new CustomEvent("private-zone:unlocked", {
+			detail: {
+				tracks: data.music,
+				resolveAsset: (asset: EncryptedAsset) => decryptAsset(asset, key),
+			},
+		}));
 	}
 
 	function readPayload(root: HTMLElement): EncryptedPayload {
@@ -320,10 +411,12 @@
 	}
 
 	function initPrivateZone(): void {
+		clearLegacyAccess();
 		const root = document.querySelector<HTMLElement>("[data-private-zone]");
 		if (!root) {
 			document.body.classList.remove("private-zone-unlocked");
 			galleryObserver?.disconnect();
+			clearDecryptedAssets();
 			return;
 		}
 		if (root.dataset.runtimeReady === "true") return;
@@ -333,17 +426,7 @@
 		const input = form?.querySelector<HTMLInputElement>("[data-pz-password]");
 		const status = form?.querySelector<HTMLElement>("[data-pz-password-status]");
 		const payload = readPayload(root);
-		const remembered = storedMaterial();
-		if (remembered) {
-			void decryptPayload(payload, remembered)
-				.then((data) => unlock(root, data))
-				.catch(() => {
-					clearStoredMaterial();
-					input?.focus({ preventScroll: true });
-				});
-		} else {
-			input?.focus({ preventScroll: true });
-		}
+		input?.focus({ preventScroll: true });
 		form?.addEventListener("submit", async (event) => {
 			event.preventDefault();
 			if (!input || !status) return;
@@ -352,11 +435,11 @@
 			status.textContent = "Verifying…";
 			try {
 				const material = await passwordMaterial(input.value);
-				const data = await decryptPayload(payload, material);
-				storeMaterial(material);
+				const key = await deriveDecryptionKey(payload, material);
+				const data = await decryptPayload(payload, key);
 				status.textContent = "";
 				input.value = "";
-				unlock(root, data);
+				unlock(root, data, key);
 			} catch {
 				status.textContent = "Incorrect password. Please try again.";
 				input.select();
@@ -367,6 +450,7 @@
 	}
 
 	function installRuntime(): void {
+		void retireLegacyPrivateZoneWorker();
 		const runtimeWindow = window as RuntimeWindow;
 		if (runtimeWindow.__privateZoneRuntimeInstalled) {
 			initPrivateZone();
