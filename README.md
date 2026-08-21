@@ -85,8 +85,14 @@ All commands are run from the root of the project, from a terminal:
 | `pnpm check`               | Run checks for errors in your code                  |
 | `pnpm format`              | Format your code using Biome                        |
 | `pnpm new-post <filename>` | Create a new post                                   |
+| `pnpm music:scaffold`      | Create the configured album and song folders        |
+| `pnpm music:covers`        | Refresh local-preview album artwork                  |
 | `pnpm astro ...`           | Run CLI commands like `astro add`, `astro check`    |
 | `pnpm astro --help`        | Get help using the Astro CLI                        |
+
+## 🎵 Music Library
+
+The `/music/` page scans numbered cover recordings from `public/music`. See [the music folder guide](public/music/README.md) for the exact paths, lyric metadata format, rebuild steps, and publication-rights notes. Lyrics are not downloaded automatically and should only be imported when their reproduction and publication are authorized.
 
 ## ✏️ Contributing
 

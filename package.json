@@ -11,6 +11,8 @@
     "astro": "astro",
     "type-check": "tsc --noEmit --isolatedDeclarations",
     "new-post": "node scripts/new-post.js",
+    "music:scaffold": "node scripts/scaffold-music-folders.mjs",
+    "music:covers": "node scripts/fetch-jay-chou-covers.mjs",
     "private-zone:encrypt": "node scripts/encrypt-private-zone-assets.mjs",
     "format": "biome format --write ./src",
     "lint": "biome check --write ./src",

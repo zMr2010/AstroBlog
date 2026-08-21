@@ -46,6 +46,10 @@ export const navBarConfig: NavBarConfig = {
 		LinkPreset.Faqs,
 		LinkPreset.About,
 		{
+			name: "Music",
+			url: "/music/",
+		},
+		{
 			name: "Chat",
 			url: "/chat/",
 			noSwup: true,

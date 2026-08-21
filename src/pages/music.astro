@@ -1,0 +1,17 @@
+---
+import { fileURLToPath } from "node:url";
+import MusicLibrary from "@components/MusicLibrary.svelte";
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+import { buildMusicLibrary } from "@utils/music-library";
+
+const publicRoot = fileURLToPath(new URL("../../public", import.meta.url));
+const albums = buildMusicLibrary(publicRoot, import.meta.env.BASE_URL);
+---
+
+<MainGridLayout
+	title="Music"
+	description="按发行时间收藏周杰伦作品与我的翻唱版本。"
+	lang="zh_CN"
+>
+	<MusicLibrary albums={albums} client:load />
+</MainGridLayout>
