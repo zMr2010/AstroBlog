@@ -1,10 +1,10 @@
 ---
 title: Understanding of Linear Alegbra (Chapter 1 ~ 3)
-published: 2026-08-14 15:27:22
+published: 2026-08-21 8:51:13
 description: Note for first 3 chapters of "Introduction to Linear Algebra"
 tags: [Math, Linear Alegbra, Matrix]
 category: Algorithm
-draft: true
+draft: false
 slug: '202608141527'
 ---
 
