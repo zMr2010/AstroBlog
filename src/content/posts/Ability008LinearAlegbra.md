@@ -1281,6 +1281,8 @@ C(A)
 N(A^T)
 $$
 
+The $\oplus$ here means every vector in the space $\R^n$ or $\R^m$ can be describe by linear combination of a pair of vectors in each space.
+
 Now we can finally understand the four rectangles diagram in Linear Algebra.
 
 ![](https://cdn.luogu.com.cn/upload/image_hosting/ao8n47gt.png)
