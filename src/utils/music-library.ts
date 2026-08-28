@@ -21,8 +21,8 @@ export interface MusicAlbumSource {
 }
 
 export interface MusicVersion {
-	number: number;
 	fileName: string;
+	recordedDate: string | null;
 	url: string;
 }
 
@@ -51,6 +51,33 @@ function publicUrl(baseUrl: string, ...parts: string[]) {
 		.replace(/^(?!\/)/, "/");
 }
 
+function parseRecordingDate(fileName: string) {
+	const stem = fileName.replace(/\.[^.]+$/, "");
+	const compactDate = stem.match(/(?:^|_)((?:19|20)\d{2})(\d{2})(\d{2})$/);
+	const separatedDate = stem.match(
+		/(?:^|_)((?:19|20)\d{2})[-._年](\d{1,2})[-._月](\d{1,2})日?$/,
+	);
+	const match = compactDate ?? separatedDate;
+	if (!match) return null;
+
+	const year = Number(match[1]);
+	const month = Number(match[2]);
+	const day = Number(match[3]);
+	const date = new Date(Date.UTC(year, month - 1, day));
+	if (
+		date.getUTCFullYear() !== year ||
+		date.getUTCMonth() !== month - 1 ||
+		date.getUTCDate() !== day
+	) {
+		return null;
+	}
+
+	return {
+		label: `${year}.${String(month).padStart(2, "0")}.${String(day).padStart(2, "0")}`,
+		sortKey: year * 10_000 + month * 100 + day,
+	};
+}
+
 function scanVersions(
 	directory: string,
 	publicDirectory: string,
@@ -59,13 +86,32 @@ function scanVersions(
 	if (!existsSync(directory)) return [];
 
 	return readdirSync(directory, { withFileTypes: true })
-		.filter((entry) => entry.isFile() && /^\d+\.mp3$/i.test(entry.name))
-		.map((entry) => ({
-			number: Number.parseInt(entry.name, 10),
-			fileName: entry.name,
-			url: publicUrl(baseUrl, publicDirectory, entry.name),
-		}))
-		.sort((left, right) => left.number - right.number);
+		.filter((entry) => entry.isFile() && /\.(m4a|mp3)$/i.test(entry.name))
+		.map((entry) => {
+			const parsedDate = parseRecordingDate(entry.name);
+			return {
+				fileName: entry.name,
+				recordedDate: parsedDate?.label ?? null,
+				sortKey: parsedDate?.sortKey ?? null,
+				url: publicUrl(
+					baseUrl,
+					publicDirectory,
+					encodeURIComponent(entry.name),
+				),
+			};
+		})
+		.sort((left, right) => {
+			if (left.sortKey === null && right.sortKey !== null) return 1;
+			if (left.sortKey !== null && right.sortKey === null) return -1;
+			if (left.sortKey !== right.sortKey) {
+				return (left.sortKey ?? 0) - (right.sortKey ?? 0);
+			}
+			return left.fileName.localeCompare(right.fileName, "zh-CN", {
+				numeric: true,
+				sensitivity: "base",
+			});
+		})
+		.map(({ sortKey: _sortKey, ...version }) => version);
 }
 
 export function buildMusicLibrary(publicRoot: string, baseUrl: string) {

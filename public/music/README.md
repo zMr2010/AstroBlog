@@ -4,8 +4,7 @@ The page reads this directory as follows:
 
 ```text
 public/music/<album-slug>/cover.jpg
-public/music/<album-slug>/<song-slug>/1.mp3
-public/music/<album-slug>/<song-slug>/2.mp3
+public/music/<album-slug>/<song-slug>/<song-title>_<singing-style>_<YYYYMMDD>.m4a
 public/music/<album-slug>/<song-slug>/lyrics.lrc
 public/music/<album-slug>/<song-slug>/lyrics.txt
 public/music/<album-slug>/<song-slug>/lyrics.meta.json
@@ -13,7 +12,10 @@ public/music/<album-slug>/<song-slug>/lyrics.meta.json
 
 - Run `pnpm music:scaffold` after the catalog changes to create every album and song folder.
 - Run `pnpm music:covers` to refresh the locally cached cover files from the Apple Music catalog IDs recorded in `src/data/jay-chou-music.json`.
-- Number recordings from `1.mp3`. Additional takes use `2.mp3`, `3.mp3`, and so on.
+- Name recordings as `<song-title>_<singing-style>_<date>.m4a`, for example `发如雪_清唱_20260827.m4a`.
+- Both `.m4a` and `.mp3` recordings are scanned. The full file name is shown on the page.
+- The date must be the final part before the extension. Supported forms include `YYYYMMDD`, `YYYY-MM-DD`, `YYYY.MM.DD`, `YYYY_MM_DD`, and `YYYY年MM月DD日`.
+- Recordings with a valid date are ordered from oldest to newest. Files without a recognized date appear afterwards, ordered by file name.
 - The page accepts either `lyrics.lrc` or `lyrics.txt`, preferring LRC when both exist.
 - Rebuild the site after adding recordings so album progress and version lists update.
 - Only publish lyrics, covers, and recordings you are authorized to use.

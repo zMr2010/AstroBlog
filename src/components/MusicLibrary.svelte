@@ -416,6 +416,7 @@ onMount(() => {
 								<div>
 									<p>MY RECORDINGS</p>
 									<h3>选择版本</h3>
+									<small>按文件名中的日期从早到晚排列</small>
 								</div>
 								<Icon icon="material-symbols:graphic-eq-rounded" />
 							</div>
@@ -427,10 +428,12 @@ onMount(() => {
 											type="button"
 											class:active={selectedVersionIndex === index}
 											aria-pressed={selectedVersionIndex === index}
+											aria-label={`选择录音 ${version.fileName}`}
+											title={version.fileName}
 											on:click={() => selectVersion(index)}
 										>
-											<span>{String(version.number).padStart(2, "0")}</span>
-											版本 {String(version.number).padStart(2, "0")}
+											<span>{version.recordedDate ?? "日期未识别"}</span>
+											<strong>{version.fileName}</strong>
 										</button>
 									{/each}
 								</div>
@@ -449,7 +452,10 @@ onMount(() => {
 									<Icon icon="material-symbols:mic-external-off-outline-rounded" />
 									<div>
 										<strong>还没有翻唱</strong>
-										<p>从 <code>{activeTrack.directory}/1.mp3</code> 开始放入。</p>
+										<p>
+											将录音放入 <code>{activeTrack.directory}</code>，例如
+											<code>{activeTrack.title}_清唱_20260828.m4a</code>。
+										</p>
 									</div>
 								</div>
 							{/if}
@@ -908,20 +914,25 @@ h1 {
 
 .version-panel { padding: 1rem; border-top: 1px solid var(--music-faint); }
 .version-heading > :global(svg) { color: var(--primary); font-size: 1.35rem; }
-.version-list { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.8rem; }
+.version-heading small { display: block; margin-top: 0.28rem; color: var(--music-muted); font-size: 0.62rem; }
+.version-list { display: grid; gap: 0.45rem; margin-top: 0.8rem; }
 .version-list button {
-	display: inline-flex;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
 	align-items: center;
 	gap: 0.4rem;
+	width: 100%;
 	padding: 0.45rem 0.65rem;
 	border: 1px solid var(--music-faint);
 	border-radius: 0.65rem;
 	background: transparent;
 	color: var(--music-muted);
 	font-size: 0.68rem;
+	text-align: left;
 	cursor: pointer;
 }
-.version-list button span { display: grid; width: 1.35rem; height: 1.35rem; place-items: center; border-radius: 50%; background: var(--btn-regular-bg); color: var(--primary); font-family: "JetBrains Mono Variable", monospace; font-size: 0.55rem; font-weight: 800; }
+.version-list button span { padding: 0.2rem 0.42rem; border-radius: 999px; background: var(--btn-regular-bg); color: var(--primary); font-family: "JetBrains Mono Variable", monospace; font-size: 0.55rem; font-weight: 800; white-space: nowrap; }
+.version-list button strong { min-width: 0; overflow-wrap: anywhere; color: var(--music-ink); font-size: 0.67rem; font-weight: 650; }
 .version-list button.active { border-color: color-mix(in oklab, var(--primary) 55%, transparent); background: var(--btn-regular-bg); color: var(--music-ink); }
 audio { width: 100%; height: 2.7rem; margin-top: 0.9rem; accent-color: var(--primary); }
 

@@ -92,7 +92,7 @@ All commands are run from the root of the project, from a terminal:
 
 ## 🎵 Music Library
 
-The `/music/` page scans numbered cover recordings from `public/music`. See [the music folder guide](public/music/README.md) for the exact paths, lyric metadata format, rebuild steps, and publication-rights notes. Lyrics are not downloaded automatically and should only be imported when their reproduction and publication are authorized.
+The `/music/` page scans dated cover recordings from `public/music`. See [the music folder guide](public/music/README.md) for the exact paths, file-name format, lyric metadata, rebuild steps, and publication-rights notes. Lyrics are not downloaded automatically and should only be imported when their reproduction and publication are authorized.
 
 ## ✏️ Contributing
 
