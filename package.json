@@ -13,6 +13,7 @@
     "new-post": "node scripts/new-post.js",
     "music:scaffold": "node scripts/scaffold-music-folders.mjs",
     "music:covers": "node scripts/fetch-jay-chou-covers.mjs",
+    "music:encrypt": "node scripts/encrypt-music-zone-assets.mjs",
     "private-zone:encrypt": "node scripts/encrypt-private-zone-assets.mjs",
     "format": "biome format --write ./src",
     "lint": "biome check --write ./src",

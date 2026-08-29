@@ -1,17 +1,16 @@
 ---
-import { fileURLToPath } from "node:url";
-import MusicLibrary from "@components/MusicLibrary.svelte";
+import EncryptedMusicLibrary from "@components/EncryptedMusicLibrary.svelte";
 import MainGridLayout from "@layouts/MainGridLayout.astro";
-import { buildMusicLibrary } from "@utils/music-library";
-
-const publicRoot = fileURLToPath(new URL("../../public", import.meta.url));
-const albums = buildMusicLibrary(publicRoot, import.meta.env.BASE_URL);
+import encryptedPayload from "../generated/music-zone-payload.json";
 ---
 
 <MainGridLayout
 	title="Music"
-	description="按发行时间收藏周杰伦作品与我的翻唱版本。"
+	description="加密的私人音乐收藏。"
 	lang="zh_CN"
 >
-	<MusicLibrary albums={albums} client:load />
+	<meta slot="head" name="robots" content="noindex, nofollow, noarchive" />
+	<div data-pagefind-ignore>
+		<EncryptedMusicLibrary payload={encryptedPayload} client:load />
+	</div>
 </MainGridLayout>

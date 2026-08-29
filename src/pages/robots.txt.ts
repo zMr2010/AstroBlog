@@ -4,6 +4,8 @@ const robotsTxt = `
 User-agent: *
 Allow: /
 Disallow: /private-zone/
+Disallow: /music/
+Disallow: /music-zone/
 
 Sitemap: ${new URL("sitemap-index.xml", import.meta.env.SITE).href}
 `.trim();

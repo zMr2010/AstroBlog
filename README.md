@@ -85,14 +85,15 @@ All commands are run from the root of the project, from a terminal:
 | `pnpm check`               | Run checks for errors in your code                  |
 | `pnpm format`              | Format your code using Biome                        |
 | `pnpm new-post <filename>` | Create a new post                                   |
-| `pnpm music:scaffold`      | Create the configured album and song folders        |
-| `pnpm music:covers`        | Refresh local-preview album artwork                  |
+| `pnpm music:scaffold`      | Create local-only album and song source folders      |
+| `pnpm music:covers`        | Refresh local-only album artwork                     |
+| `pnpm music:encrypt`       | Encrypt the Music catalog and all published media    |
 | `pnpm astro ...`           | Run CLI commands like `astro add`, `astro check`    |
 | `pnpm astro --help`        | Get help using the Astro CLI                        |
 
 ## 🎵 Music Library
 
-The `/music/` page scans dated cover recordings from `public/music`. See [the music folder guide](public/music/README.md) for the exact paths, file-name format, lyric metadata, rebuild steps, and publication-rights notes. Lyrics are not downloaded automatically and should only be imported when their reproduction and publication are authorized.
+The password-gated `/music/` page reads only encrypted catalog and media files. Keep originals in `music-zone-source`, set `MUSIC_ZONE_PASSWORD` in the ignored `.env`, run `pnpm music:encrypt`, and then build the site. See [the Music Zone source guide](music-zone-source/README.md) for the exact paths, file-name/date rules, lyric metadata, and rights notes. Lyrics are not downloaded automatically and should only be imported when their reproduction and publication are authorized.
 
 ## ✏️ Contributing
 

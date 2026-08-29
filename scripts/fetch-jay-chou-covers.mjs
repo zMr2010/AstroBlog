@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const catalogPath = join(projectRoot, "src", "data", "jay-chou-music.json");
-const musicRoot = join(projectRoot, "public", "music");
+const musicRoot = join(projectRoot, "music-zone-source");
 const albums = JSON.parse(await readFile(catalogPath, "utf8"));
 
 console.warn(

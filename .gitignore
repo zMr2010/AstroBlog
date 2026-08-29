@@ -26,6 +26,12 @@ pnpm-debug.log*
 /private-zone-source/.manifest-*.json
 /public/private-zone/.encrypted-build-*/
 
+# Music Zone plaintext sources stay local; only generated ciphertext is committed.
+/music-zone-source/*
+!/music-zone-source/README.md
+/public/music-zone/.encrypted-build-*/
+/src/generated/.music-zone-payload-*.json
+
 # macOS-specific files
 .DS_Store
 

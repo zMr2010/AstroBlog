@@ -1,26 +1,28 @@
 <script lang="ts">
 import Icon from "@iconify/svelte";
-import { onMount, tick } from "svelte";
-import type { MusicAlbum, MusicTrack } from "../utils/music-library";
+import { onDestroy, tick } from "svelte";
+import type {
+	EncryptedMusicAsset,
+	LyricsMetadata,
+	MusicAlbum,
+	MusicAssetReleaser,
+	MusicAssetResolver,
+	MusicTrack,
+} from "../utils/music-library";
 
 export let albums: MusicAlbum[] = [];
-
-interface LyricsMetadata {
-	complete?: boolean;
-	rightsStatus?: string;
-	sourceUrl?: string;
-	attribution?: string;
-	copyrightNotice?: string;
-}
+export let resolveAsset: MusicAssetResolver;
+export let releaseAsset: MusicAssetReleaser;
 
 let selectedAlbumIndex = -1;
 let selectedTrackIndex = -1;
-let selectedVersionIndex = 0;
+let selectedVersionIndex = -1;
 let audioElement: HTMLAudioElement | null = null;
+let activeAudioUrl = "";
+let audioState: "idle" | "loading" | "ready" | "error" = "idle";
+let audioRequest = 0;
 let lyricsText = "";
 let lyricsState: "idle" | "loading" | "ready" | "missing" | "error" = "idle";
-let lyricsRequestKey = "";
-let lyricsAbortController: AbortController | null = null;
 let lyricsMetadata: LyricsMetadata | null = null;
 let embeddedLyricsAttribution = "";
 
@@ -48,75 +50,32 @@ function formatDate(date: string) {
 	return `${year}.${month}.${day}`;
 }
 
-function setUrlState(album: MusicAlbum, track?: MusicTrack) {
-	if (typeof window === "undefined") return;
-	const hash = track ? `${album.slug}/${track.slug}` : album.slug;
-	const url = `${window.location.pathname}${window.location.search}#${hash}`;
-	// Match Swup's updateHistoryRecord shape while preserving its history index.
-	window.history.replaceState(
-		{
-			...(window.history.state ?? {}),
-			url,
-			random: Math.random(),
-			source: "swup",
-		},
-		"",
-		url,
-	);
-}
-
 function resetLyrics() {
-	lyricsAbortController?.abort();
-	lyricsAbortController = null;
-	lyricsRequestKey = "";
 	lyricsState = "idle";
 	lyricsText = "";
 	lyricsMetadata = null;
 	embeddedLyricsAttribution = "";
 }
 
-function readUrlState() {
-	if (typeof window === "undefined") return;
-	const [albumSlug, trackSlug] = window.location.hash
-		.replace(/^#/, "")
-		.split("/");
-	if (!albumSlug) {
-		selectedAlbumIndex = -1;
-		selectedTrackIndex = -1;
-		selectedVersionIndex = 0;
-		resetLyrics();
-		return;
+function resetAudio() {
+	const previousVersion = activeVersion;
+	audioRequest += 1;
+	if (audioElement) {
+		audioElement.pause();
+		audioElement.removeAttribute("src");
+		audioElement.load();
 	}
-
-	const albumIndex = albums.findIndex((album) => album.slug === albumSlug);
-	if (albumIndex < 0) {
-		selectedAlbumIndex = -1;
-		selectedTrackIndex = -1;
-		selectedVersionIndex = 0;
-		resetLyrics();
-		return;
-	}
-
-	selectedAlbumIndex = albumIndex;
-	selectedTrackIndex = trackSlug
-		? albums[albumIndex].tracks.findIndex((track) => track.slug === trackSlug)
-		: -1;
-	selectedVersionIndex = 0;
-
-	if (selectedTrackIndex >= 0) {
-		void loadLyrics(albums[albumIndex].tracks[selectedTrackIndex]);
-	} else {
-		resetLyrics();
-	}
+	activeAudioUrl = "";
+	audioState = "idle";
+	if (previousVersion) releaseAsset(previousVersion.asset);
 }
 
 async function selectAlbum(index: number) {
-	if (audioElement) audioElement.pause();
+	resetAudio();
 	selectedAlbumIndex = index;
 	selectedTrackIndex = -1;
-	selectedVersionIndex = 0;
+	selectedVersionIndex = -1;
 	resetLyrics();
-	setUrlState(albums[index]);
 
 	await tick();
 	const workspace = document.getElementById("music-workspace");
@@ -131,11 +90,10 @@ async function selectAlbum(index: number) {
 
 async function selectTrack(index: number, event: MouseEvent) {
 	if (!activeAlbum) return;
-	if (audioElement) audioElement.pause();
+	resetAudio();
 	selectedTrackIndex = index;
-	selectedVersionIndex = 0;
+	selectedVersionIndex = -1;
 	const track = activeAlbum.tracks[index];
-	setUrlState(activeAlbum, track);
 	void loadLyrics(track);
 	await tick();
 	if (event.detail > 0 && window.matchMedia("(max-width: 880px)").matches) {
@@ -149,15 +107,99 @@ async function selectTrack(index: number, event: MouseEvent) {
 }
 
 async function selectVersion(index: number) {
+	const version = activeTrack?.versions[index];
+	if (!version) return;
+	resetAudio();
+	const request = ++audioRequest;
 	selectedVersionIndex = index;
-	await tick();
-	if (!audioElement) return;
-	audioElement.load();
+	activeAudioUrl = "";
+	audioState = "loading";
 	try {
-		await audioElement.play();
+		const url = await resolveAsset(version.asset);
+		if (request !== audioRequest) {
+			if (activeVersion?.asset.encryptedSrc !== version.asset.encryptedSrc) {
+				releaseAsset(version.asset);
+			}
+			return;
+		}
+		activeAudioUrl = url;
+		audioState = "ready";
+		await tick();
+		audioElement?.load();
 	} catch {
-		// Browsers may still require a separate press on the native play button.
+		if (request !== audioRequest) return;
+		audioState = "error";
 	}
+}
+
+interface EncryptedImageOptions {
+	asset: EncryptedMusicAsset;
+	eager: boolean;
+}
+
+function encryptedImage(
+	node: HTMLImageElement,
+	initialOptions: EncryptedImageOptions,
+) {
+	let options = initialOptions;
+	let observer: IntersectionObserver | null = null;
+	let request = 0;
+	let initialized = false;
+
+	const disconnect = () => {
+		observer?.disconnect();
+		observer = null;
+	};
+	const load = async (currentRequest: number) => {
+		try {
+			const url = await resolveAsset(options.asset);
+			if (request !== currentRequest) return;
+			node.hidden = false;
+			node.src = url;
+		} catch {
+			if (request === currentRequest) node.hidden = true;
+		}
+	};
+	const configure = (nextOptions: EncryptedImageOptions) => {
+		if (
+			initialized &&
+			options.asset.encryptedSrc === nextOptions.asset.encryptedSrc &&
+			options.asset.iv === nextOptions.asset.iv &&
+			options.eager === nextOptions.eager
+		) {
+			return;
+		}
+		initialized = true;
+		options = nextOptions;
+		request += 1;
+		const currentRequest = request;
+		disconnect();
+		node.hidden = false;
+		node.removeAttribute("src");
+		if (options.eager || !("IntersectionObserver" in window)) {
+			void load(currentRequest);
+			return;
+		}
+		observer = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((entry) => entry.isIntersecting)) return;
+				disconnect();
+				void load(currentRequest);
+			},
+			{ rootMargin: "240px" },
+		);
+		observer.observe(node);
+	};
+
+	configure(initialOptions);
+	return {
+		update: configure,
+		destroy() {
+			request += 1;
+			disconnect();
+			node.removeAttribute("src");
+		},
+	};
 }
 
 function normalizeLyrics(raw: string) {
@@ -183,62 +225,18 @@ function normalizeLyrics(raw: string) {
 	return { text, embeddedAttribution };
 }
 
-async function loadLyrics(track: MusicTrack) {
-	lyricsAbortController?.abort();
-	const controller = new AbortController();
-	lyricsAbortController = controller;
-	const requestKey = track.directory;
-	lyricsRequestKey = requestKey;
-	lyricsState = "loading";
+function loadLyrics(track: MusicTrack) {
 	lyricsText = "";
-	lyricsMetadata = null;
+	lyricsMetadata = track.lyricsMetadata ?? null;
 	embeddedLyricsAttribution = "";
-	let nextMetadata: LyricsMetadata | null = null;
-
-	try {
-		try {
-			const metadataResponse = await fetch(track.lyricsMetaUrl, {
-				cache: "no-store",
-				signal: controller.signal,
-			});
-			const metadataContentType =
-				metadataResponse.headers.get("content-type") ?? "";
-			if (metadataResponse.ok && !metadataContentType.includes("text/html")) {
-				nextMetadata = (await metadataResponse.json()) as LyricsMetadata;
-			}
-		} catch {
-			if (controller.signal.aborted) return;
-			// Metadata is optional; missing metadata is surfaced as "待核对".
-		}
-
-		for (const lyricsUrl of track.lyricsUrls) {
-			const response = await fetch(lyricsUrl, {
-				cache: "no-store",
-				signal: controller.signal,
-			});
-			const contentType = response.headers.get("content-type") ?? "";
-			if (!response.ok || contentType.includes("text/html")) continue;
-			const normalized = normalizeLyrics(await response.text());
-			if (controller.signal.aborted || lyricsRequestKey !== requestKey) return;
-			if (normalized.text) {
-				lyricsMetadata = nextMetadata;
-				lyricsText = normalized.text;
-				embeddedLyricsAttribution = normalized.embeddedAttribution;
-				lyricsState = "ready";
-				return;
-			}
-		}
-
-		if (!controller.signal.aborted && lyricsRequestKey === requestKey) {
-			lyricsState = "missing";
-		}
-	} catch {
-		if (!controller.signal.aborted && lyricsRequestKey === requestKey) {
-			lyricsState = "error";
-		}
-	} finally {
-		if (lyricsAbortController === controller) lyricsAbortController = null;
+	const normalized = normalizeLyrics(track.lyricsContent ?? "");
+	if (normalized.text) {
+		lyricsText = normalized.text;
+		embeddedLyricsAttribution = normalized.embeddedAttribution;
+		lyricsState = "ready";
+		return;
 	}
+	lyricsState = "missing";
 }
 
 function hideBrokenCover(event: Event) {
@@ -246,15 +244,7 @@ function hideBrokenCover(event: Event) {
 	if (image instanceof HTMLImageElement) image.hidden = true;
 }
 
-onMount(() => {
-	readUrlState();
-	window.addEventListener("hashchange", readUrlState);
-
-	return () => {
-		lyricsAbortController?.abort();
-		window.removeEventListener("hashchange", readUrlState);
-	};
-});
+onDestroy(resetAudio);
 </script>
 
 <section class="music-library card-base">
@@ -266,7 +256,7 @@ onMount(() => {
 				按首发日期收录 16 张录音室专辑，以及《不能说的秘密》《天台》两张电影原声带中由周杰伦主唱或明确合唱的人声曲目。
 			</p>
 			<p class="rights-caption">
-				歌词只读取站长手动导入且确认可使用的本地文件，本站不会自动抓取第三方完整歌词。
+				专辑目录、歌词、封面与翻唱录音均在输入密码后由浏览器本地解密，不会以明文资源发布。
 			</p>
 		</div>
 
@@ -309,7 +299,10 @@ onMount(() => {
 						{String(index + 1).padStart(2, "0")}
 					</span>
 					<img
-						src={album.cover}
+						use:encryptedImage={{
+							asset: album.coverAsset,
+							eager: index < 6,
+						}}
 						alt={`${album.title}封面`}
 						loading={index < 6 ? "eager" : "lazy"}
 						on:error={hideBrokenCover}
@@ -355,7 +348,11 @@ onMount(() => {
 			<header class="album-detail-header">
 				<div class="detail-cover">
 					<span aria-hidden="true">{String(selectedAlbumIndex + 1).padStart(2, "0")}</span>
-					<img src={activeAlbum.cover} alt="" on:error={hideBrokenCover} />
+					<img
+						use:encryptedImage={{ asset: activeAlbum.coverAsset, eager: true }}
+						alt=""
+						on:error={hideBrokenCover}
+					/>
 				</div>
 				<div class="detail-copy">
 					<p>{activeAlbum.kind} · {formatDate(activeAlbum.releaseDate)}</p>
@@ -438,14 +435,20 @@ onMount(() => {
 									{/each}
 								</div>
 
-								{#if activeVersion}
+								{#if audioState === "loading"}
+									<p class="audio-status" aria-live="polite">正在解密所选录音…</p>
+								{:else if audioState === "error"}
+									<p class="audio-status error" aria-live="polite">录音解密失败，请重试或重新生成密文。</p>
+								{:else if activeVersion && activeAudioUrl}
 									<audio
 										bind:this={audioElement}
 										controls
 										preload="metadata"
-										src={activeVersion.url}
+										src={activeAudioUrl}
 									>
 									</audio>
+								{:else}
+									<p class="audio-status">点击一个版本后，才会下载并在本地解密对应录音。</p>
 								{/if}
 							{:else}
 								<div class="no-recording">
@@ -935,6 +938,8 @@ h1 {
 .version-list button strong { min-width: 0; overflow-wrap: anywhere; color: var(--music-ink); font-size: 0.67rem; font-weight: 650; }
 .version-list button.active { border-color: color-mix(in oklab, var(--primary) 55%, transparent); background: var(--btn-regular-bg); color: var(--music-ink); }
 audio { width: 100%; height: 2.7rem; margin-top: 0.9rem; accent-color: var(--primary); }
+.audio-status { margin: 0.8rem 0 0; color: var(--music-muted); font-size: 0.65rem; line-height: 1.55; }
+.audio-status.error { color: oklch(0.62 0.2 25); }
 
 .no-recording { display: flex; align-items: flex-start; gap: 0.65rem; margin-top: 0.8rem; padding: 0.8rem; border-radius: 0.75rem; background: var(--btn-regular-bg); color: var(--music-muted); }
 .no-recording > :global(svg) { flex: none; color: var(--primary); font-size: 1.25rem; }

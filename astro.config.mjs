@@ -102,7 +102,13 @@ export default defineConfig({
 		}),
         svelte(),
 		sitemap({
-			filter: (page) => !new URL(page).pathname.startsWith("/private-zone/"),
+			filter: (page) => {
+				const pathname = new URL(page).pathname;
+				return (
+					!pathname.startsWith("/private-zone/") &&
+					!pathname.startsWith("/music/")
+				);
+			},
 		}),
 	],
 	markdown: {
